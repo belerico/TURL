@@ -9,7 +9,6 @@ Various retrieval models for scoring a individual document for a given query.
 import math
 import sys
 
-from elastic import Elastic
 from elastic_cache import ElasticCache
 
 
@@ -60,6 +59,7 @@ class Scorer(object):
 # =========================================
 class ScorerLM(Scorer):
     """Language Model (LM) scorer."""
+
     JM = "jm"
     DIRICHLET = "dirichlet"
 
@@ -79,7 +79,7 @@ class ScorerLM(Scorer):
 
     @staticmethod
     def get_jm_prob(tf_t_d, len_d, tf_t_C, len_C, lambd):
-        """Computes JM-smoothed probability.
+        r"""Computes JM-smoothed probability.
         p(t|theta_d) = [(1-lambda) tf(t, d)/|d|] + [lambda tf(t, C)/|C|]
 
         :param tf_t_d: tf(t,d)
@@ -97,7 +97,7 @@ class ScorerLM(Scorer):
 
     @staticmethod
     def get_dirichlet_prob(tf_t_d, len_d, tf_t_C, len_C, mu):
-        """Computes Dirichlet-smoothed probability.
+        r"""Computes Dirichlet-smoothed probability.
         P(t|theta_d) = [tf(t, d) + mu P(t|C)] / [|d| + mu]
 
         :param tf_t_d: tf(t,d)
@@ -136,7 +136,11 @@ class ScorerLM(Scorer):
         if self.SCORER_DEBUG:
             print("\t\tt = {}\t f = {}".format(t, field))
             print("\t\t\tDoc:  tf(t,f) = {}\t|f| = {}".format(tf_t_d_f, len_d_f))
-            print("\t\t\tColl: tf(t,f) = {}\t|f| = ".format(tf_t_C_f, len_C_f))
+            print(
+                "\t\t\tColl: tf(t,f) = {}\t|f| = ".format(
+                    tf_t_C_f,
+                )
+            )
 
         p_t_d_f = 0
         # JM smoothing: p(t|theta_d_f) = [(1-lambda) tf(t, d_f)/|d_f|] + [lambda tf(t, C_f)/|C_f|]
@@ -170,7 +174,7 @@ class ScorerLM(Scorer):
         return p_t_theta_d_f
 
     def score_doc(self, doc_id):
-        """Scores the given document using LM.
+        r"""Scores the given document using LM.
         p(q|theta_d) = \sum log(p(t|theta_d))
 
         :param doc_id: document id
@@ -203,9 +207,6 @@ if __name__ == "__main__":
     query = "gonna friends"
     doc_id = "4"
     es = ElasticCache("toy_index")
-    params = {"fields": "content",
-              "__fields": {"title": 0.2, "content": 0.8},
-              "__fields": ["content", "title"]
-              }
+    params = {"fields": "content", "__fields": {"title": 0.2, "content": 0.8}, "__fields": ["content", "title"]}
     score = ScorerPRMS(es, query, params).score_doc(doc_id)
     print(score)

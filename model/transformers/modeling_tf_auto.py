@@ -18,52 +18,73 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import logging
 
-from .modeling_tf_bert import TFBertModel, TFBertForMaskedLM, TFBertForSequenceClassification, TFBertForQuestionAnswering
-from .modeling_tf_openai import TFOpenAIGPTModel, TFOpenAIGPTLMHeadModel
-from .modeling_tf_gpt2 import TFGPT2Model, TFGPT2LMHeadModel
-from .modeling_tf_transfo_xl import TFTransfoXLModel, TFTransfoXLLMHeadModel
-from .modeling_tf_xlnet import TFXLNetModel, TFXLNetLMHeadModel, TFXLNetForSequenceClassification, TFXLNetForQuestionAnsweringSimple
-from .modeling_tf_xlm import TFXLMModel, TFXLMWithLMHeadModel, TFXLMForSequenceClassification, TFXLMForQuestionAnsweringSimple
-from .modeling_tf_roberta import TFRobertaModel, TFRobertaForMaskedLM, TFRobertaForSequenceClassification
-from .modeling_tf_distilbert import TFDistilBertModel, TFDistilBertForQuestionAnswering, TFDistilBertForMaskedLM, TFDistilBertForSequenceClassification
-from .modeling_tf_ctrl import TFCTRLModel, TFCTRLLMHeadModel
-
-from .file_utils import add_start_docstrings
+from .modeling_tf_bert import (
+    TFBertForMaskedLM,
+    TFBertForQuestionAnswering,
+    TFBertForSequenceClassification,
+    TFBertModel,
+)
+from .modeling_tf_ctrl import TFCTRLLMHeadModel, TFCTRLModel
+from .modeling_tf_distilbert import (
+    TFDistilBertForMaskedLM,
+    TFDistilBertForQuestionAnswering,
+    TFDistilBertForSequenceClassification,
+    TFDistilBertModel,
+)
+from .modeling_tf_gpt2 import TFGPT2LMHeadModel, TFGPT2Model
+from .modeling_tf_openai import TFOpenAIGPTLMHeadModel, TFOpenAIGPTModel
+from .modeling_tf_roberta import TFRobertaForMaskedLM, TFRobertaForSequenceClassification, TFRobertaModel
+from .modeling_tf_transfo_xl import TFTransfoXLLMHeadModel, TFTransfoXLModel
+from .modeling_tf_xlm import (
+    TFXLMForQuestionAnsweringSimple,
+    TFXLMForSequenceClassification,
+    TFXLMModel,
+    TFXLMWithLMHeadModel,
+)
+from .modeling_tf_xlnet import (
+    TFXLNetForQuestionAnsweringSimple,
+    TFXLNetForSequenceClassification,
+    TFXLNetLMHeadModel,
+    TFXLNetModel,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class TFAutoModel(object):
     r"""
-        :class:`~transformers.TFAutoModel` is a generic model class
-        that will be instantiated as one of the base model classes of the library
-        when created with the `TFAutoModel.from_pretrained(pretrained_model_name_or_path)`
-        class method.
+    :class:`~transformers.TFAutoModel` is a generic model class
+    that will be instantiated as one of the base model classes of the library
+    when created with the `TFAutoModel.from_pretrained(pretrained_model_name_or_path)`
+    class method.
 
-        The `from_pretrained()` method takes care of returning the correct model class instance
-        using pattern matching on the `pretrained_model_name_or_path` string.
+    The `from_pretrained()` method takes care of returning the correct model class instance
+    using pattern matching on the `pretrained_model_name_or_path` string.
 
-        The base model class to instantiate is selected as the first pattern matching
-        in the `pretrained_model_name_or_path` string (in the following order):
-            - contains `distilbert`: TFDistilBertModel (DistilBERT model)
-            - contains `roberta`: TFRobertaModel (RoBERTa model)
-            - contains `bert`: TFBertModel (Bert model)
-            - contains `openai-gpt`: TFOpenAIGPTModel (OpenAI GPT model)
-            - contains `gpt2`: TFGPT2Model (OpenAI GPT-2 model)
-            - contains `transfo-xl`: TFTransfoXLModel (Transformer-XL model)
-            - contains `xlnet`: TFXLNetModel (XLNet model)
-            - contains `xlm`: TFXLMModel (XLM model)
-            - contains `ctrl`: TFCTRLModel (CTRL model)
+    The base model class to instantiate is selected as the first pattern matching
+    in the `pretrained_model_name_or_path` string (in the following order):
+        - contains `distilbert`: TFDistilBertModel (DistilBERT model)
+        - contains `roberta`: TFRobertaModel (RoBERTa model)
+        - contains `bert`: TFBertModel (Bert model)
+        - contains `openai-gpt`: TFOpenAIGPTModel (OpenAI GPT model)
+        - contains `gpt2`: TFGPT2Model (OpenAI GPT-2 model)
+        - contains `transfo-xl`: TFTransfoXLModel (Transformer-XL model)
+        - contains `xlnet`: TFXLNetModel (XLNet model)
+        - contains `xlm`: TFXLMModel (XLM model)
+        - contains `ctrl`: TFCTRLModel (CTRL model)
 
-        This class cannot be instantiated using `__init__()` (throws an error).
+    This class cannot be instantiated using `__init__()` (throws an error).
     """
+
     def __init__(self):
-        raise EnvironmentError("TFAutoModel is designed to be instantiated "
-            "using the `TFAutoModel.from_pretrained(pretrained_model_name_or_path)` method.")
+        raise EnvironmentError(
+            "TFAutoModel is designed to be instantiated "
+            "using the `TFAutoModel.from_pretrained(pretrained_model_name_or_path)` method."
+        )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
-        r""" Instantiates one of the base model classes of the library
+        r"""Instantiates one of the base model classes of the library
         from a pre-trained model configuration.
 
         The model class to instantiate is selected as the first pattern matching
@@ -133,61 +154,66 @@ class TFAutoModel(object):
             model = TFAutoModel.from_pretrained('./pt_model/bert_pytorch_model.bin', from_pt=True, config=config)
 
         """
-        if 'distilbert' in pretrained_model_name_or_path:
+        if "distilbert" in pretrained_model_name_or_path:
             return TFDistilBertModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'roberta' in pretrained_model_name_or_path:
+        elif "roberta" in pretrained_model_name_or_path:
             return TFRobertaModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'bert' in pretrained_model_name_or_path:
+        elif "bert" in pretrained_model_name_or_path:
             return TFBertModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'openai-gpt' in pretrained_model_name_or_path:
+        elif "openai-gpt" in pretrained_model_name_or_path:
             return TFOpenAIGPTModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'gpt2' in pretrained_model_name_or_path:
+        elif "gpt2" in pretrained_model_name_or_path:
             return TFGPT2Model.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'transfo-xl' in pretrained_model_name_or_path:
+        elif "transfo-xl" in pretrained_model_name_or_path:
             return TFTransfoXLModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlnet' in pretrained_model_name_or_path:
+        elif "xlnet" in pretrained_model_name_or_path:
             return TFXLNetModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlm' in pretrained_model_name_or_path:
+        elif "xlm" in pretrained_model_name_or_path:
             return TFXLMModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'ctrl' in pretrained_model_name_or_path:
+        elif "ctrl" in pretrained_model_name_or_path:
             return TFCTRLModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
 
-        raise ValueError("Unrecognized model identifier in {}. Should contains one of "
-                         "'bert', 'openai-gpt', 'gpt2', 'transfo-xl', 'xlnet', "
-                         "'xlm', 'roberta', 'ctrl'".format(pretrained_model_name_or_path))
+        raise ValueError(
+            "Unrecognized model identifier in {}. Should contains one of "
+            "'bert', 'openai-gpt', 'gpt2', 'transfo-xl', 'xlnet', "
+            "'xlm', 'roberta', 'ctrl'".format(pretrained_model_name_or_path)
+        )
 
 
 class TFAutoModelWithLMHead(object):
     r"""
-        :class:`~transformers.TFAutoModelWithLMHead` is a generic model class
-        that will be instantiated as one of the language modeling model classes of the library
-        when created with the `TFAutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)`
-        class method.
+    :class:`~transformers.TFAutoModelWithLMHead` is a generic model class
+    that will be instantiated as one of the language modeling model classes of the library
+    when created with the `TFAutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)`
+    class method.
 
-        The `from_pretrained()` method takes care of returning the correct model class instance
-        using pattern matching on the `pretrained_model_name_or_path` string.
+    The `from_pretrained()` method takes care of returning the correct model class instance
+    using pattern matching on the `pretrained_model_name_or_path` string.
 
-        The model class to instantiate is selected as the first pattern matching
-        in the `pretrained_model_name_or_path` string (in the following order):
-            - contains `distilbert`: TFDistilBertForMaskedLM (DistilBERT model)
-            - contains `roberta`: TFRobertaForMaskedLM (RoBERTa model)
-            - contains `bert`: TFBertForMaskedLM (Bert model)
-            - contains `openai-gpt`: TFOpenAIGPTLMHeadModel (OpenAI GPT model)
-            - contains `gpt2`: TFGPT2LMHeadModel (OpenAI GPT-2 model)
-            - contains `transfo-xl`: TFTransfoXLLMHeadModel (Transformer-XL model)
-            - contains `xlnet`: TFXLNetLMHeadModel (XLNet model)
-            - contains `xlm`: TFXLMWithLMHeadModel (XLM model)
-            - contains `ctrl`: TFCTRLLMHeadModel (CTRL model)
+    The model class to instantiate is selected as the first pattern matching
+    in the `pretrained_model_name_or_path` string (in the following order):
+        - contains `distilbert`: TFDistilBertForMaskedLM (DistilBERT model)
+        - contains `roberta`: TFRobertaForMaskedLM (RoBERTa model)
+        - contains `bert`: TFBertForMaskedLM (Bert model)
+        - contains `openai-gpt`: TFOpenAIGPTLMHeadModel (OpenAI GPT model)
+        - contains `gpt2`: TFGPT2LMHeadModel (OpenAI GPT-2 model)
+        - contains `transfo-xl`: TFTransfoXLLMHeadModel (Transformer-XL model)
+        - contains `xlnet`: TFXLNetLMHeadModel (XLNet model)
+        - contains `xlm`: TFXLMWithLMHeadModel (XLM model)
+        - contains `ctrl`: TFCTRLLMHeadModel (CTRL model)
 
-        This class cannot be instantiated using `__init__()` (throws an error).
+    This class cannot be instantiated using `__init__()` (throws an error).
     """
+
     def __init__(self):
-        raise EnvironmentError("TFAutoModelWithLMHead is designed to be instantiated "
-            "using the `TFAutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)` method.")
+        raise EnvironmentError(
+            "TFAutoModelWithLMHead is designed to be instantiated "
+            "using the `TFAutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)` method."
+        )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
-        r""" Instantiates one of the language modeling model classes of the library
+        r"""Instantiates one of the language modeling model classes of the library
         from a pre-trained model configuration.
 
         The `from_pretrained()` method takes care of returning the correct model class instance
@@ -261,57 +287,62 @@ class TFAutoModelWithLMHead(object):
             model = TFAutoModelWithLMHead.from_pretrained('./pt_model/bert_pytorch_model.bin', from_pt=True, config=config)
 
         """
-        if 'distilbert' in pretrained_model_name_or_path:
+        if "distilbert" in pretrained_model_name_or_path:
             return TFDistilBertForMaskedLM.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'roberta' in pretrained_model_name_or_path:
+        elif "roberta" in pretrained_model_name_or_path:
             return TFRobertaForMaskedLM.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'bert' in pretrained_model_name_or_path:
+        elif "bert" in pretrained_model_name_or_path:
             return TFBertForMaskedLM.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'openai-gpt' in pretrained_model_name_or_path:
+        elif "openai-gpt" in pretrained_model_name_or_path:
             return TFOpenAIGPTLMHeadModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'gpt2' in pretrained_model_name_or_path:
+        elif "gpt2" in pretrained_model_name_or_path:
             return TFGPT2LMHeadModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'transfo-xl' in pretrained_model_name_or_path:
+        elif "transfo-xl" in pretrained_model_name_or_path:
             return TFTransfoXLLMHeadModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlnet' in pretrained_model_name_or_path:
+        elif "xlnet" in pretrained_model_name_or_path:
             return TFXLNetLMHeadModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlm' in pretrained_model_name_or_path:
+        elif "xlm" in pretrained_model_name_or_path:
             return TFXLMWithLMHeadModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'ctrl' in pretrained_model_name_or_path:
+        elif "ctrl" in pretrained_model_name_or_path:
             return TFCTRLLMHeadModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
 
-        raise ValueError("Unrecognized model identifier in {}. Should contains one of "
-                         "'bert', 'openai-gpt', 'gpt2', 'transfo-xl', 'xlnet', "
-                         "'xlm', 'roberta', 'ctrl'".format(pretrained_model_name_or_path))
+        raise ValueError(
+            "Unrecognized model identifier in {}. Should contains one of "
+            "'bert', 'openai-gpt', 'gpt2', 'transfo-xl', 'xlnet', "
+            "'xlm', 'roberta', 'ctrl'".format(pretrained_model_name_or_path)
+        )
 
 
 class TFAutoModelForSequenceClassification(object):
     r"""
-        :class:`~transformers.TFAutoModelForSequenceClassification` is a generic model class
-        that will be instantiated as one of the sequence classification model classes of the library
-        when created with the `TFAutoModelForSequenceClassification.from_pretrained(pretrained_model_name_or_path)`
-        class method.
+    :class:`~transformers.TFAutoModelForSequenceClassification` is a generic model class
+    that will be instantiated as one of the sequence classification model classes of the library
+    when created with the `TFAutoModelForSequenceClassification.from_pretrained(pretrained_model_name_or_path)`
+    class method.
 
-        The `from_pretrained()` method takes care of returning the correct model class instance
-        using pattern matching on the `pretrained_model_name_or_path` string.
+    The `from_pretrained()` method takes care of returning the correct model class instance
+    using pattern matching on the `pretrained_model_name_or_path` string.
 
-        The model class to instantiate is selected as the first pattern matching
-        in the `pretrained_model_name_or_path` string (in the following order):
-            - contains `distilbert`: TFDistilBertForSequenceClassification (DistilBERT model)
-            - contains `roberta`: TFRobertaForSequenceClassification (RoBERTa model)
-            - contains `bert`: TFBertForSequenceClassification (Bert model)
-            - contains `xlnet`: TFXLNetForSequenceClassification (XLNet model)
-            - contains `xlm`: TFXLMForSequenceClassification (XLM model)
+    The model class to instantiate is selected as the first pattern matching
+    in the `pretrained_model_name_or_path` string (in the following order):
+        - contains `distilbert`: TFDistilBertForSequenceClassification (DistilBERT model)
+        - contains `roberta`: TFRobertaForSequenceClassification (RoBERTa model)
+        - contains `bert`: TFBertForSequenceClassification (Bert model)
+        - contains `xlnet`: TFXLNetForSequenceClassification (XLNet model)
+        - contains `xlm`: TFXLMForSequenceClassification (XLM model)
 
-        This class cannot be instantiated using `__init__()` (throws an error).
+    This class cannot be instantiated using `__init__()` (throws an error).
     """
+
     def __init__(self):
-        raise EnvironmentError("TFAutoModelWithLMHead is designed to be instantiated "
-            "using the `TFAutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)` method.")
+        raise EnvironmentError(
+            "TFAutoModelWithLMHead is designed to be instantiated "
+            "using the `TFAutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)` method."
+        )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
-        r""" Instantiates one of the sequence classification model classes of the library
+        r"""Instantiates one of the sequence classification model classes of the library
         from a pre-trained model configuration.
 
         The `from_pretrained()` method takes care of returning the correct model class instance
@@ -384,47 +415,58 @@ class TFAutoModelForSequenceClassification(object):
             model = TFAutoModelForSequenceClassification.from_pretrained('./pt_model/bert_pytorch_model.bin', from_pt=True, config=config)
 
         """
-        if 'distilbert' in pretrained_model_name_or_path:
-            return TFDistilBertForSequenceClassification.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'roberta' in pretrained_model_name_or_path:
-            return TFRobertaForSequenceClassification.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'bert' in pretrained_model_name_or_path:
+        if "distilbert" in pretrained_model_name_or_path:
+            return TFDistilBertForSequenceClassification.from_pretrained(
+                pretrained_model_name_or_path, *model_args, **kwargs
+            )
+        elif "roberta" in pretrained_model_name_or_path:
+            return TFRobertaForSequenceClassification.from_pretrained(
+                pretrained_model_name_or_path, *model_args, **kwargs
+            )
+        elif "bert" in pretrained_model_name_or_path:
             return TFBertForSequenceClassification.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlnet' in pretrained_model_name_or_path:
-            return TFXLNetForSequenceClassification.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlm' in pretrained_model_name_or_path:
+        elif "xlnet" in pretrained_model_name_or_path:
+            return TFXLNetForSequenceClassification.from_pretrained(
+                pretrained_model_name_or_path, *model_args, **kwargs
+            )
+        elif "xlm" in pretrained_model_name_or_path:
             return TFXLMForSequenceClassification.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
 
-        raise ValueError("Unrecognized model identifier in {}. Should contains one of "
-                         "'bert', 'xlnet', 'xlm', 'roberta'".format(pretrained_model_name_or_path))
+        raise ValueError(
+            "Unrecognized model identifier in {}. Should contains one of "
+            "'bert', 'xlnet', 'xlm', 'roberta'".format(pretrained_model_name_or_path)
+        )
 
 
 class TFAutoModelForQuestionAnswering(object):
     r"""
-        :class:`~transformers.TFAutoModelForQuestionAnswering` is a generic model class
-        that will be instantiated as one of the question answering model classes of the library
-        when created with the `TFAutoModelForQuestionAnswering.from_pretrained(pretrained_model_name_or_path)`
-        class method.
+    :class:`~transformers.TFAutoModelForQuestionAnswering` is a generic model class
+    that will be instantiated as one of the question answering model classes of the library
+    when created with the `TFAutoModelForQuestionAnswering.from_pretrained(pretrained_model_name_or_path)`
+    class method.
 
-        The `from_pretrained()` method takes care of returning the correct model class instance
-        using pattern matching on the `pretrained_model_name_or_path` string.
+    The `from_pretrained()` method takes care of returning the correct model class instance
+    using pattern matching on the `pretrained_model_name_or_path` string.
 
-        The model class to instantiate is selected as the first pattern matching
-        in the `pretrained_model_name_or_path` string (in the following order):
-            - contains `distilbert`: TFDistilBertForQuestionAnswering (DistilBERT model)
-            - contains `bert`: TFBertForQuestionAnswering (Bert model)
-            - contains `xlnet`: TFXLNetForQuestionAnswering (XLNet model)
-            - contains `xlm`: TFXLMForQuestionAnswering (XLM model)
+    The model class to instantiate is selected as the first pattern matching
+    in the `pretrained_model_name_or_path` string (in the following order):
+        - contains `distilbert`: TFDistilBertForQuestionAnswering (DistilBERT model)
+        - contains `bert`: TFBertForQuestionAnswering (Bert model)
+        - contains `xlnet`: TFXLNetForQuestionAnswering (XLNet model)
+        - contains `xlm`: TFXLMForQuestionAnswering (XLM model)
 
-        This class cannot be instantiated using `__init__()` (throws an error).
+    This class cannot be instantiated using `__init__()` (throws an error).
     """
+
     def __init__(self):
-        raise EnvironmentError("TFAutoModelWithLMHead is designed to be instantiated "
-            "using the `TFAutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)` method.")
+        raise EnvironmentError(
+            "TFAutoModelWithLMHead is designed to be instantiated "
+            "using the `TFAutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)` method."
+        )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
-        r""" Instantiates one of the question answering model classes of the library
+        r"""Instantiates one of the question answering model classes of the library
         from a pre-trained model configuration.
 
         The `from_pretrained()` method takes care of returning the correct model class instance
@@ -496,14 +538,20 @@ class TFAutoModelForQuestionAnswering(object):
             model = TFAutoModelForQuestionAnswering.from_pretrained('./pt_model/bert_pytorch_model.bin', from_pt=True, config=config)
 
         """
-        if 'distilbert' in pretrained_model_name_or_path:
-            return TFDistilBertForQuestionAnswering.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'bert' in pretrained_model_name_or_path:
+        if "distilbert" in pretrained_model_name_or_path:
+            return TFDistilBertForQuestionAnswering.from_pretrained(
+                pretrained_model_name_or_path, *model_args, **kwargs
+            )
+        elif "bert" in pretrained_model_name_or_path:
             return TFBertForQuestionAnswering.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlnet' in pretrained_model_name_or_path:
-            return TFXLNetForQuestionAnsweringSimple.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlm' in pretrained_model_name_or_path:
+        elif "xlnet" in pretrained_model_name_or_path:
+            return TFXLNetForQuestionAnsweringSimple.from_pretrained(
+                pretrained_model_name_or_path, *model_args, **kwargs
+            )
+        elif "xlm" in pretrained_model_name_or_path:
             return TFXLMForQuestionAnsweringSimple.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
 
-        raise ValueError("Unrecognized model identifier in {}. Should contains one of "
-                         "'bert', 'xlnet', 'xlm'".format(pretrained_model_name_or_path))
+        raise ValueError(
+            "Unrecognized model identifier in {}. Should contains one of "
+            "'bert', 'xlnet', 'xlm'".format(pretrained_model_name_or_path)
+        )

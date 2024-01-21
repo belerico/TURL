@@ -24,7 +24,7 @@ class ElasticCache(Elastic):
         self.__coll_termfreq = {}
 
     def __check_cache(self, func, params, var):
-        #TODO
+        # TODO
         pass
 
     def num_docs(self):
@@ -74,7 +74,7 @@ class ElasticCache(Elastic):
         return self.__doc_freq[field][term]
 
     def coll_term_freq(self, term, field):
-        """ Returns collection term frequency for the given field."""
+        """Returns collection term frequency for the given field."""
         if field not in self.__coll_termfreq:
             self.__coll_termfreq[field] = {}
         if term not in self.__coll_termfreq[field]:

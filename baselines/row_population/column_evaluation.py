@@ -10,7 +10,6 @@ Column population pipeline.
 from elastic import Elastic
 
 
-
 class Column_evaluation(object):
     def __init__(self, test_tables=None):
         """
@@ -28,7 +27,6 @@ class Column_evaluation(object):
         :param c: Table caption
         :return: Ranked suggestions
         """
-        pass
 
     def find_candidates_c(self, c, seed, num=100):
         """find candidate tables complement with table caption"""
@@ -40,9 +38,8 @@ class Column_evaluation(object):
             cand += labels
         return set([i for i in cand if i not in seed]), list(res.keys())
 
-
     def find_candidates_l(self, seed, num=100):
-        """find candidate labels Using labels """
+        """find candidate labels Using labels"""
         tables = []
         cand = []
         for label in seed:
@@ -53,7 +50,6 @@ class Column_evaluation(object):
                 labels = doc["_source"]["headings"]
                 cand += labels
         return set([i for i in cand if i not in seed]), tables
-
 
     def find_candidates_e(self, E, seed, num=100):
         """find candidate labels Using entities"""
@@ -71,15 +67,7 @@ class Column_evaluation(object):
 
     def generate_search_body(self, entity, field):
         """Generate search body"""
-        body = {
-            "query": {
-                "bool": {
-                    "must": {
-                        "term": {field: entity}
-                    }
-                }
-            }
-        }
+        body = {"query": {"bool": {"must": {"term": {field: entity}}}}}
         return body
 
     def parse(self, text):
@@ -98,8 +86,3 @@ class Column_evaluation(object):
                 continue
             terms.append(term)
         return terms
-
-
-
-
-

@@ -15,8 +15,7 @@
 # limitations under the License.
 """TF general model utils."""
 
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import logging
 import os
@@ -24,29 +23,30 @@ import os
 import tensorflow as tf
 
 from .configuration_utils import PretrainedConfig
-from .file_utils import cached_path, WEIGHTS_NAME, TF_WEIGHTS_NAME, TF2_WEIGHTS_NAME
+from .file_utils import TF2_WEIGHTS_NAME, WEIGHTS_NAME, cached_path
 from .modeling_tf_pytorch_utils import load_pytorch_checkpoint_in_tf2_model
 
 logger = logging.getLogger(__name__)
 
 DUMMY_INPUTS = [[7, 6, 0, 0, 1], [1, 2, 3, 0, 0], [0, 0, 0, 4, 5]]
 
+
 class TFPreTrainedModel(tf.keras.Model):
-    r""" Base class for all TF models.
+    r"""Base class for all TF models.
 
-        :class:`~transformers.TFPreTrainedModel` takes care of storing the configuration of the models and handles methods for loading/downloading/saving models
-        as well as a few methods common to all models to (i) resize the input embeddings and (ii) prune heads in the self-attention heads.
+    :class:`~transformers.TFPreTrainedModel` takes care of storing the configuration of the models and handles methods for loading/downloading/saving models
+    as well as a few methods common to all models to (i) resize the input embeddings and (ii) prune heads in the self-attention heads.
 
-        Class attributes (overridden by derived classes):
-            - ``config_class``: a class derived from :class:`~transformers.PretrainedConfig` to use as configuration class for this model architecture.
-            - ``pretrained_model_archive_map``: a python ``dict`` of with `short-cut-names` (string) as keys and `url` (string) of associated pretrained weights as values.
-            - ``load_tf_weights``: a python ``method`` for loading a TensorFlow checkpoint in a PyTorch model, taking as arguments:
+    Class attributes (overridden by derived classes):
+        - ``config_class``: a class derived from :class:`~transformers.PretrainedConfig` to use as configuration class for this model architecture.
+        - ``pretrained_model_archive_map``: a python ``dict`` of with `short-cut-names` (string) as keys and `url` (string) of associated pretrained weights as values.
+        - ``load_tf_weights``: a python ``method`` for loading a TensorFlow checkpoint in a PyTorch model, taking as arguments:
 
-                - ``model``: an instance of the relevant subclass of :class:`~transformers.PreTrainedModel`,
-                - ``config``: an instance of the relevant subclass of :class:`~transformers.PretrainedConfig`,
-                - ``path``: a path (string) to the TensorFlow checkpoint.
+            - ``model``: an instance of the relevant subclass of :class:`~transformers.PreTrainedModel`,
+            - ``config``: an instance of the relevant subclass of :class:`~transformers.PretrainedConfig`,
+            - ``path``: a path (string) to the TensorFlow checkpoint.
 
-            - ``base_model_prefix``: a string indicating the attribute associated to the base model in derived classes of the same architecture adding modules on top of the base model.
+        - ``base_model_prefix``: a string indicating the attribute associated to the base model in derived classes of the same architecture adding modules on top of the base model.
     """
     config_class = None
     pretrained_model_archive_map = {}
@@ -61,13 +61,13 @@ class TFPreTrainedModel(tf.keras.Model):
                 "To create a model from a pretrained model use "
                 "`model = {}.from_pretrained(PRETRAINED_MODEL_NAME)`".format(
                     self.__class__.__name__, self.__class__.__name__
-                ))
+                )
+            )
         # Save config in model
         self.config = config
 
     def get_input_embeddings(self):
-        """ Get model's input embeddings
-        """
+        """Get model's input embeddings"""
         base_model = getattr(self, self.base_model_prefix, self)
         if base_model is not self:
             return base_model.get_input_embeddings()
@@ -75,13 +75,13 @@ class TFPreTrainedModel(tf.keras.Model):
             raise NotImplementedError
 
     def get_output_embeddings(self):
-        """ Get model's output embeddings
-            Return None if the model doesn't have output embeddings
+        """Get model's output embeddings
+        Return None if the model doesn't have output embeddings
         """
         return None  # Overwrite for models with output embeddings
 
     def _get_resized_embeddings(self, old_embeddings, new_num_tokens=None):
-        """ Build a resized Embedding Variable from a provided token Embedding Module.
+        """Build a resized Embedding Variable from a provided token Embedding Module.
             Increasing the size will add newly initialized vectors at the end
             Reducing the size will remove vectors from the end
 
@@ -115,13 +115,13 @@ class TFPreTrainedModel(tf.keras.Model):
         # return new_embeddings
 
     def resize_token_embeddings(self, new_num_tokens=None):
-        """ Resize input token embeddings matrix of the model if new_num_tokens != config.vocab_size.
+        """Resize input token embeddings matrix of the model if new_num_tokens != config.vocab_size.
         Take care of tying weights embeddings afterwards if the model class has a `tie_weights()` method.
 
         Arguments:
 
             new_num_tokens: (`optional`) int:
-                New number of tokens in the embedding matrix. Increasing the size will add newly initialized vectors at the end. Reducing the size will remove vectors from the end. 
+                New number of tokens in the embedding matrix. Increasing the size will add newly initialized vectors at the end. Reducing the size will remove vectors from the end.
                 If not provided or None: does nothing and just returns a pointer to the input tokens ``tf.Variable`` Module of the model.
 
         Return: ``tf.Variable``
@@ -130,19 +130,21 @@ class TFPreTrainedModel(tf.keras.Model):
         raise NotImplementedError
 
     def prune_heads(self, heads_to_prune):
-        """ Prunes heads of the base model.
+        """Prunes heads of the base model.
 
-            Arguments:
+        Arguments:
 
-                heads_to_prune: dict with keys being selected layer indices (`int`) and associated values being the list of heads to prune in said layer (list of `int`).
+            heads_to_prune: dict with keys being selected layer indices (`int`) and associated values being the list of heads to prune in said layer (list of `int`).
         """
         raise NotImplementedError
 
     def save_pretrained(self, save_directory):
-        """ Save a model and its configuration file to a directory, so that it
-            can be re-loaded using the `:func:`~transformers.PreTrainedModel.from_pretrained`` class method.
+        """Save a model and its configuration file to a directory, so that it
+        can be re-loaded using the `:func:`~transformers.PreTrainedModel.from_pretrained`` class method.
         """
-        assert os.path.isdir(save_directory), "Saving path should be a directory where the model and configuration can be saved"
+        assert os.path.isdir(
+            save_directory
+        ), "Saving path should be a directory where the model and configuration can be saved"
 
         # Save configuration file
         self.config.save_pretrained(save_directory)
@@ -212,19 +214,21 @@ class TFPreTrainedModel(tf.keras.Model):
             model = BertModel.from_pretrained('./tf_model/my_tf_checkpoint.ckpt.index', from_pt=True, config=config)
 
         """
-        config = kwargs.pop('config', None)
-        cache_dir = kwargs.pop('cache_dir', None)
-        from_pt = kwargs.pop('from_pt', False)
-        force_download = kwargs.pop('force_download', False)
-        proxies = kwargs.pop('proxies', None)
+        config = kwargs.pop("config", None)
+        cache_dir = kwargs.pop("cache_dir", None)
+        from_pt = kwargs.pop("from_pt", False)
+        force_download = kwargs.pop("force_download", False)
+        proxies = kwargs.pop("proxies", None)
 
         # Load config
         if config is None:
             config, model_kwargs = cls.config_class.from_pretrained(
-                pretrained_model_name_or_path, *model_args,
-                cache_dir=cache_dir, return_unused_kwargs=True,
+                pretrained_model_name_or_path,
+                *model_args,
+                cache_dir=cache_dir,
+                return_unused_kwargs=True,
                 force_download=force_download,
-                **kwargs
+                **kwargs,
             )
         else:
             model_kwargs = kwargs
@@ -241,9 +245,11 @@ class TFPreTrainedModel(tf.keras.Model):
                     # Load from a PyTorch checkpoint
                     archive_file = os.path.join(pretrained_model_name_or_path, WEIGHTS_NAME)
                 else:
-                    raise EnvironmentError("Error no file named {} found in directory {} or `from_pt` set to False".format(
-                        [WEIGHTS_NAME, TF2_WEIGHTS_NAME],
-                        pretrained_model_name_or_path))
+                    raise EnvironmentError(
+                        "Error no file named {} found in directory {} or `from_pt` set to False".format(
+                            [WEIGHTS_NAME, TF2_WEIGHTS_NAME], pretrained_model_name_or_path
+                        )
+                    )
             elif os.path.isfile(pretrained_model_name_or_path):
                 archive_file = pretrained_model_name_or_path
             else:
@@ -251,26 +257,27 @@ class TFPreTrainedModel(tf.keras.Model):
 
             # redirect to the cache, if necessary
             try:
-                resolved_archive_file = cached_path(archive_file, cache_dir=cache_dir, force_download=force_download, proxies=proxies)
+                resolved_archive_file = cached_path(
+                    archive_file, cache_dir=cache_dir, force_download=force_download, proxies=proxies
+                )
             except EnvironmentError as e:
                 if pretrained_model_name_or_path in cls.pretrained_model_archive_map:
-                    logger.error(
-                        "Couldn't reach server at '{}' to download pretrained weights.".format(
-                            archive_file))
+                    logger.error("Couldn't reach server at '{}' to download pretrained weights.".format(archive_file))
                 else:
                     logger.error(
                         "Model name '{}' was not found in model name list ({}). "
                         "We assumed '{}' was a path or url but couldn't find any file "
                         "associated to this path or url.".format(
                             pretrained_model_name_or_path,
-                            ', '.join(cls.pretrained_model_archive_map.keys()),
-                            archive_file))
+                            ", ".join(cls.pretrained_model_archive_map.keys()),
+                            archive_file,
+                        )
+                    )
                 raise e
             if resolved_archive_file == archive_file:
                 logger.info("loading weights file {}".format(archive_file))
             else:
-                logger.info("loading weights file {} from cache at {}".format(
-                    archive_file, resolved_archive_file))
+                logger.info("loading weights file {} from cache at {}".format(archive_file, resolved_archive_file))
         else:
             resolved_archive_file = None
 
@@ -292,10 +299,11 @@ class TFPreTrainedModel(tf.keras.Model):
 
         return model
 
+
 class TFConv1D(tf.keras.layers.Layer):
     def __init__(self, nf, nx, initializer_range=0.02, **kwargs):
-        """ TFConv1D layer as defined by Radford et al. for OpenAI GPT (and also used in GPT-2)
-            Basically works like a Linear layer but the weights are transposed
+        """TFConv1D layer as defined by Radford et al. for OpenAI GPT (and also used in GPT-2)
+        Basically works like a Linear layer but the weights are transposed
         """
         super(TFConv1D, self).__init__(**kwargs)
         self.nf = nf
@@ -304,13 +312,9 @@ class TFConv1D(tf.keras.layers.Layer):
 
     def build(self, input_shape):
         self.weight = self.add_weight(
-            "weight",
-            shape=[self.nx, self.nf],
-            initializer=get_initializer(self.initializer_range))
-        self.bias = self.add_weight(
-            "bias",
-            shape=[1, self.nf],
-            initializer=tf.zeros_initializer())
+            "weight", shape=[self.nx, self.nf], initializer=get_initializer(self.initializer_range)
+        )
+        self.bias = self.add_weight("bias", shape=[1, self.nf], initializer=tf.zeros_initializer())
 
     def call(self, x):
         bz, sl = shape_list(x)[:2]
@@ -324,8 +328,8 @@ class TFConv1D(tf.keras.layers.Layer):
 
 
 class TFSharedEmbeddings(tf.keras.layers.Layer):
-    """Construct shared token embeddings.
-    """
+    """Construct shared token embeddings."""
+
     def __init__(self, vocab_size, hidden_size, initializer_range=None, **kwargs):
         super(TFSharedEmbeddings, self).__init__(**kwargs)
         self.vocab_size = vocab_size
@@ -338,9 +342,8 @@ class TFSharedEmbeddings(tf.keras.layers.Layer):
             https://github.com/tensorflow/models/blob/a009f4fb9d2fc4949e32192a944688925ef78659/official/transformer/v2/embedding_layer.py#L24
         """
         self.weight = self.add_weight(
-            "weight",
-            shape=[self.vocab_size, self.hidden_size],
-            initializer=get_initializer(self.initializer_range))
+            "weight", shape=[self.vocab_size, self.hidden_size], initializer=get_initializer(self.initializer_range)
+        )
         super(TFSharedEmbeddings, self).build(input_shape)
 
     def call(self, inputs, mode="embedding"):
@@ -354,7 +357,7 @@ class TFSharedEmbeddings(tf.keras.layers.Layer):
                 linear tensor, float32 with shape [batch_size, length, vocab_size].
         Raises:
             ValueError: if mode is not valid.
-        
+
         Shared weights logic adapted from
             https://github.com/tensorflow/models/blob/a009f4fb9d2fc4949e32192a944688925ef78659/official/transformer/v2/embedding_layer.py#L24
         """
@@ -371,10 +374,10 @@ class TFSharedEmbeddings(tf.keras.layers.Layer):
 
     def _linear(self, inputs):
         """Computes logits by running inputs through a linear layer.
-            Args:
-                inputs: A float32 tensor with shape [..., hidden_size]
-            Returns:
-                float32 tensor with shape [..., vocab_size].
+        Args:
+            inputs: A float32 tensor with shape [..., hidden_size]
+        Returns:
+            float32 tensor with shape [..., vocab_size].
         """
         first_dims = shape_list(inputs)[:-1]
 
@@ -385,58 +388,59 @@ class TFSharedEmbeddings(tf.keras.layers.Layer):
 
 
 class TFSequenceSummary(tf.keras.layers.Layer):
-    r""" Compute a single vector summary of a sequence hidden states according to various possibilities:
-        Args of the config class:
-            summary_type:
-                - 'last' => [default] take the last token hidden state (like XLNet)
-                - 'first' => take the first token hidden state (like Bert)
-                - 'mean' => take the mean of all tokens hidden states
-                - 'cls_index' => supply a Tensor of classification token position (GPT/GPT-2)
-                - 'attn' => Not implemented now, use multi-head attention
-            summary_use_proj: Add a projection after the vector extraction
-            summary_proj_to_labels: If True, the projection outputs to config.num_labels classes (otherwise to hidden_size). Default: False.
-            summary_activation: 'tanh' => add a tanh activation to the output, Other => no activation. Default
-            summary_first_dropout: Add a dropout before the projection and activation
-            summary_last_dropout: Add a dropout after the projection and activation
+    r"""Compute a single vector summary of a sequence hidden states according to various possibilities:
+    Args of the config class:
+        summary_type:
+            - 'last' => [default] take the last token hidden state (like XLNet)
+            - 'first' => take the first token hidden state (like Bert)
+            - 'mean' => take the mean of all tokens hidden states
+            - 'cls_index' => supply a Tensor of classification token position (GPT/GPT-2)
+            - 'attn' => Not implemented now, use multi-head attention
+        summary_use_proj: Add a projection after the vector extraction
+        summary_proj_to_labels: If True, the projection outputs to config.num_labels classes (otherwise to hidden_size). Default: False.
+        summary_activation: 'tanh' => add a tanh activation to the output, Other => no activation. Default
+        summary_first_dropout: Add a dropout before the projection and activation
+        summary_last_dropout: Add a dropout after the projection and activation
     """
+
     def __init__(self, config, initializer_range=0.02, **kwargs):
         super(TFSequenceSummary, self).__init__(**kwargs)
 
-        self.summary_type = config.summary_type if hasattr(config, 'summary_use_proj') else 'last'
-        if self.summary_type == 'attn':
+        self.summary_type = config.summary_type if hasattr(config, "summary_use_proj") else "last"
+        if self.summary_type == "attn":
             # We should use a standard multi-head attention module with absolute positional embedding for that.
             # Cf. https://github.com/zihangdai/xlnet/blob/master/modeling.py#L253-L276
             # We can probably just use the multi-head attention module of PyTorch >=1.1.0
             raise NotImplementedError
 
-        self.has_summary = hasattr(config, 'summary_use_proj') and config.summary_use_proj
+        self.has_summary = hasattr(config, "summary_use_proj") and config.summary_use_proj
         if self.has_summary:
-            if hasattr(config, 'summary_proj_to_labels') and config.summary_proj_to_labels and config.num_labels > 0:
+            if hasattr(config, "summary_proj_to_labels") and config.summary_proj_to_labels and config.num_labels > 0:
                 num_classes = config.num_labels
             else:
                 num_classes = config.hidden_size
-            self.summary = tf.keras.layers.Dense(num_classes,
-                                                    kernel_initializer=get_initializer(initializer_range),
-                                                    name='summary')
+            self.summary = tf.keras.layers.Dense(
+                num_classes, kernel_initializer=get_initializer(initializer_range), name="summary"
+            )
 
-        self.has_activation = hasattr(config, 'summary_activation') and config.summary_activation == 'tanh'
+        self.has_activation = hasattr(config, "summary_activation") and config.summary_activation == "tanh"
         if self.has_activation:
             self.activation = tf.keras.activations.tanh
 
-        self.has_first_dropout = hasattr(config, 'summary_first_dropout') and config.summary_first_dropout > 0
+        self.has_first_dropout = hasattr(config, "summary_first_dropout") and config.summary_first_dropout > 0
         if self.has_first_dropout:
             self.first_dropout = tf.keras.layers.Dropout(config.summary_first_dropout)
 
-        self.has_last_dropout = hasattr(config, 'summary_last_dropout') and config.summary_last_dropout > 0
+        self.has_last_dropout = hasattr(config, "summary_last_dropout") and config.summary_last_dropout > 0
         if self.has_last_dropout:
             self.last_dropout = tf.keras.layers.Dropout(config.summary_last_dropout)
 
     def call(self, inputs, training=False):
-        """ hidden_states: float Tensor in shape [bsz, seq_len, hidden_size], the hidden-states of the last layer.
-            cls_index: [optional] position of the classification token if summary_type == 'cls_index',
-                shape (bsz,) or more generally (bsz, ...) where ... are optional leading dimensions of hidden_states.
-                if summary_type == 'cls_index' and cls_index is None:
-                    we take the last token of the sequence as classification token
+        """hidden_states: float Tensor in shape [bsz, seq_len, hidden_size], the hidden-states of the last layer.
+        cls_index: [optional] position of the classification token if summary_type == 'cls_index',
+            shape (bsz,) or more generally (bsz, ...) where ... are optional leading dimensions of hidden_states.
+            if summary_type == 'cls_index' and cls_index is None:
+                we take the last token of the sequence as classification token
         """
         if not isinstance(inputs, (dict, tuple, list)):
             hidden_states = inputs
@@ -446,29 +450,33 @@ class TFSequenceSummary(tf.keras.layers.Layer):
             cls_index = inputs[1] if len(inputs) > 1 else None
             assert len(inputs) <= 2, "Too many inputs."
         else:
-            input_ids = inputs.get('input_ids')
-            cls_index = inputs.get('cls_index', None)
+            inputs.get("input_ids")
+            cls_index = inputs.get("cls_index", None)
 
-        if self.summary_type == 'last':
+        if self.summary_type == "last":
             output = hidden_states[:, -1]
-        elif self.summary_type == 'first':
+        elif self.summary_type == "first":
             output = hidden_states[:, 0]
-        elif self.summary_type == 'mean':
+        elif self.summary_type == "mean":
             output = tf.mean(hidden_states, axis=1)
-        elif self.summary_type == 'cls_index':
+        elif self.summary_type == "cls_index":
             hidden_shape = shape_list(hidden_states)  # e.g. [batch, num choices, seq length, hidden dims]
             if cls_index is None:
-                cls_index = tf.fill(hidden_shape[:-2], hidden_shape[-2] - 1)  # A tensor full of shape [batch] or [batch, num choices] full of sequence length
+                cls_index = tf.fill(
+                    hidden_shape[:-2], hidden_shape[-2] - 1
+                )  # A tensor full of shape [batch] or [batch, num choices] full of sequence length
             cls_shape = shape_list(cls_index)
             if len(cls_shape) <= len(hidden_shape) - 2:
                 cls_index = cls_index[..., tf.newaxis]
             # else:
-                # cls_index = cls_index[..., tf.newaxis]
-                # cls_index = cls_index.expand((-1,) * (cls_index.dim()-1) + (hidden_states.size(-1),))
+            # cls_index = cls_index[..., tf.newaxis]
+            # cls_index = cls_index.expand((-1,) * (cls_index.dim()-1) + (hidden_states.size(-1),))
             # shape of cls_index: (bsz, XX, 1, hidden_size) where XX are optional leading dim of hidden_states
             output = tf.gather(hidden_states, cls_index, batch_dims=len(hidden_shape) - 2)
-            output = tf.squeeze(output, axis=len(hidden_shape) - 2) # shape of output: (batch, num choices, hidden_size)
-        elif self.summary_type == 'attn':
+            output = tf.squeeze(
+                output, axis=len(hidden_shape) - 2
+            )  # shape of output: (batch, num choices, hidden_size)
+        elif self.summary_type == "attn":
             raise NotImplementedError
 
         if self.has_first_dropout:
@@ -485,11 +493,13 @@ class TFSequenceSummary(tf.keras.layers.Layer):
 
         return output
 
+
 def shape_list(x):
     """Deal with dynamic shape in tensorflow cleanly."""
     static = x.shape.as_list()
     dynamic = tf.shape(x)
     return [dynamic[i] if s is None else s for i, s in enumerate(static)]
+
 
 def get_initializer(initializer_range=0.02):
     """Creates a `tf.initializers.truncated_normal` with the given range.

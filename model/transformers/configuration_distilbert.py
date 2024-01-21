@@ -13,12 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ DistilBERT model configuration """
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
-import sys
 import json
 import logging
+import sys
 from io import open
 
 from .configuration_utils import PretrainedConfig
@@ -26,35 +25,38 @@ from .configuration_utils import PretrainedConfig
 logger = logging.getLogger(__name__)
 
 DISTILBERT_PRETRAINED_CONFIG_ARCHIVE_MAP = {
-    'distilbert-base-uncased': "https://s3.amazonaws.com/models.huggingface.co/bert/distilbert-base-uncased-config.json",
-    'distilbert-base-uncased-distilled-squad': "https://s3.amazonaws.com/models.huggingface.co/bert/distilbert-base-uncased-distilled-squad-config.json"
+    "distilbert-base-uncased": "https://s3.amazonaws.com/models.huggingface.co/bert/distilbert-base-uncased-config.json",
+    "distilbert-base-uncased-distilled-squad": "https://s3.amazonaws.com/models.huggingface.co/bert/distilbert-base-uncased-distilled-squad-config.json",
 }
 
 
 class DistilBertConfig(PretrainedConfig):
     pretrained_config_archive_map = DISTILBERT_PRETRAINED_CONFIG_ARCHIVE_MAP
 
-    def __init__(self,
-                 vocab_size_or_config_json_file=30522,
-                 max_position_embeddings=512,
-                 sinusoidal_pos_embds=False,
-                 n_layers=6,
-                 n_heads=12,
-                 dim=768,
-                 hidden_dim=4*768,
-                 dropout=0.1,
-                 attention_dropout=0.1,
-                 activation='gelu',
-                 initializer_range=0.02,
-                 tie_weights_=True,
-                 qa_dropout=0.1,
-                 seq_classif_dropout=0.2,
-                 **kwargs):
+    def __init__(
+        self,
+        vocab_size_or_config_json_file=30522,
+        max_position_embeddings=512,
+        sinusoidal_pos_embds=False,
+        n_layers=6,
+        n_heads=12,
+        dim=768,
+        hidden_dim=4 * 768,
+        dropout=0.1,
+        attention_dropout=0.1,
+        activation="gelu",
+        initializer_range=0.02,
+        tie_weights_=True,
+        qa_dropout=0.1,
+        seq_classif_dropout=0.2,
+        **kwargs,
+    ):
         super(DistilBertConfig, self).__init__(**kwargs)
 
-        if isinstance(vocab_size_or_config_json_file, str) or (sys.version_info[0] == 2
-                        and isinstance(vocab_size_or_config_json_file, unicode)):
-            with open(vocab_size_or_config_json_file, "r", encoding='utf-8') as reader:
+        if isinstance(vocab_size_or_config_json_file, str) or (
+            sys.version_info[0] == 2 and isinstance(vocab_size_or_config_json_file, unicode)
+        ):
+            with open(vocab_size_or_config_json_file, "r", encoding="utf-8") as reader:
                 json_config = json.loads(reader.read())
             for key, value in json_config.items():
                 self.__dict__[key] = value
@@ -74,8 +76,11 @@ class DistilBertConfig(PretrainedConfig):
             self.qa_dropout = qa_dropout
             self.seq_classif_dropout = seq_classif_dropout
         else:
-            raise ValueError("First argument must be either a vocabulary size (int)"
-                             " or the path to a pretrained model config file (str)")
+            raise ValueError(
+                "First argument must be either a vocabulary size (int)"
+                " or the path to a pretrained model config file (str)"
+            )
+
     @property
     def hidden_size(self):
         return self.dim

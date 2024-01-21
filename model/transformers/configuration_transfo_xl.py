@@ -27,78 +27,81 @@ from .configuration_utils import PretrainedConfig
 logger = logging.getLogger(__name__)
 
 TRANSFO_XL_PRETRAINED_CONFIG_ARCHIVE_MAP = {
-    'transfo-xl-wt103': "https://s3.amazonaws.com/models.huggingface.co/bert/transfo-xl-wt103-config.json",
+    "transfo-xl-wt103": "https://s3.amazonaws.com/models.huggingface.co/bert/transfo-xl-wt103-config.json",
 }
+
 
 class TransfoXLConfig(PretrainedConfig):
     """Configuration class to store the configuration of a `TransfoXLModel`.
 
-        Args:
-            vocab_size_or_config_json_file: Vocabulary size of `inputs_ids` in `TransfoXLModel` or a configuration json file.
-            cutoffs: cutoffs for the adaptive softmax
-            d_model: Dimensionality of the model's hidden states.
-            d_embed: Dimensionality of the embeddings
-            d_head: Dimensionality of the model's heads.
-            div_val: divident value for adapative input and softmax
-            pre_lnorm: apply LayerNorm to the input instead of the output
-            d_inner: Inner dimension in FF
-            n_layer: Number of hidden layers in the Transformer encoder.
-            n_head: Number of attention heads for each attention layer in
-                the Transformer encoder.
-            tgt_len: number of tokens to predict
-            ext_len: length of the extended context
-            mem_len: length of the retained previous heads
-            same_length: use the same attn length for all tokens
-            proj_share_all_but_first: True to share all but first projs, False not to share.
-            attn_type: attention type. 0 for Transformer-XL, 1 for Shaw et al, 2 for Vaswani et al, 3 for Al Rfou et al.
-            clamp_len: use the same pos embeddings after clamp_len
-            sample_softmax: number of samples in sampled softmax
-            adaptive: use adaptive softmax
-            tie_weight: tie the word embedding and softmax weights
-            dropout: The dropout probabilitiy for all fully connected
-                layers in the embeddings, encoder, and pooler.
-            dropatt: The dropout ratio for the attention probabilities.
-            untie_r: untie relative position biases
-            embd_pdrop: The dropout ratio for the embeddings.
-            init: parameter initializer to use
-            init_range: parameters initialized by U(-init_range, init_range).
-            proj_init_std: parameters initialized by N(0, init_std)
-            init_std: parameters initialized by N(0, init_std)
+    Args:
+        vocab_size_or_config_json_file: Vocabulary size of `inputs_ids` in `TransfoXLModel` or a configuration json file.
+        cutoffs: cutoffs for the adaptive softmax
+        d_model: Dimensionality of the model's hidden states.
+        d_embed: Dimensionality of the embeddings
+        d_head: Dimensionality of the model's heads.
+        div_val: divident value for adapative input and softmax
+        pre_lnorm: apply LayerNorm to the input instead of the output
+        d_inner: Inner dimension in FF
+        n_layer: Number of hidden layers in the Transformer encoder.
+        n_head: Number of attention heads for each attention layer in
+            the Transformer encoder.
+        tgt_len: number of tokens to predict
+        ext_len: length of the extended context
+        mem_len: length of the retained previous heads
+        same_length: use the same attn length for all tokens
+        proj_share_all_but_first: True to share all but first projs, False not to share.
+        attn_type: attention type. 0 for Transformer-XL, 1 for Shaw et al, 2 for Vaswani et al, 3 for Al Rfou et al.
+        clamp_len: use the same pos embeddings after clamp_len
+        sample_softmax: number of samples in sampled softmax
+        adaptive: use adaptive softmax
+        tie_weight: tie the word embedding and softmax weights
+        dropout: The dropout probabilitiy for all fully connected
+            layers in the embeddings, encoder, and pooler.
+        dropatt: The dropout ratio for the attention probabilities.
+        untie_r: untie relative position biases
+        embd_pdrop: The dropout ratio for the embeddings.
+        init: parameter initializer to use
+        init_range: parameters initialized by U(-init_range, init_range).
+        proj_init_std: parameters initialized by N(0, init_std)
+        init_std: parameters initialized by N(0, init_std)
     """
+
     pretrained_config_archive_map = TRANSFO_XL_PRETRAINED_CONFIG_ARCHIVE_MAP
 
-    def __init__(self,
-                 vocab_size_or_config_json_file=267735,
-                 cutoffs=[20000, 40000, 200000],
-                 d_model=1024,
-                 d_embed=1024,
-                 n_head=16,
-                 d_head=64,
-                 d_inner=4096,
-                 div_val=4,
-                 pre_lnorm=False,
-                 n_layer=18,
-                 tgt_len=128,
-                 ext_len=0,
-                 mem_len=1600,
-                 clamp_len=1000,
-                 same_length=True,
-                 proj_share_all_but_first=True,
-                 attn_type=0,
-                 sample_softmax=-1,
-                 adaptive=True,
-                 tie_weight=True,
-                 dropout=0.1,
-                 dropatt=0.0,
-                 untie_r=True,
-                 init="normal",
-                 init_range=0.01,
-                 proj_init_std=0.01,
-                 init_std=0.02,
-                 layer_norm_epsilon=1e-5,
-                 **kwargs):
-        """Constructs TransfoXLConfig.
-        """
+    def __init__(
+        self,
+        vocab_size_or_config_json_file=267735,
+        cutoffs=[20000, 40000, 200000],
+        d_model=1024,
+        d_embed=1024,
+        n_head=16,
+        d_head=64,
+        d_inner=4096,
+        div_val=4,
+        pre_lnorm=False,
+        n_layer=18,
+        tgt_len=128,
+        ext_len=0,
+        mem_len=1600,
+        clamp_len=1000,
+        same_length=True,
+        proj_share_all_but_first=True,
+        attn_type=0,
+        sample_softmax=-1,
+        adaptive=True,
+        tie_weight=True,
+        dropout=0.1,
+        dropatt=0.0,
+        untie_r=True,
+        init="normal",
+        init_range=0.01,
+        proj_init_std=0.01,
+        init_std=0.02,
+        layer_norm_epsilon=1e-5,
+        **kwargs,
+    ):
+        """Constructs TransfoXLConfig."""
         super(TransfoXLConfig, self).__init__(**kwargs)
         self.n_token = vocab_size_or_config_json_file if isinstance(vocab_size_or_config_json_file, int) else -1
         self.cutoffs = []
@@ -133,15 +136,18 @@ class TransfoXLConfig(PretrainedConfig):
         self.init_std = init_std
         self.layer_norm_epsilon = layer_norm_epsilon
 
-        if isinstance(vocab_size_or_config_json_file, str) or (sys.version_info[0] == 2
-                        and isinstance(vocab_size_or_config_json_file, unicode)):
-            with open(vocab_size_or_config_json_file, "r", encoding='utf-8') as reader:
+        if isinstance(vocab_size_or_config_json_file, str) or (
+            sys.version_info[0] == 2 and isinstance(vocab_size_or_config_json_file, unicode)
+        ):
+            with open(vocab_size_or_config_json_file, "r", encoding="utf-8") as reader:
                 json_config = json.loads(reader.read())
             for key, value in json_config.items():
                 self.__dict__[key] = value
         elif not isinstance(vocab_size_or_config_json_file, int):
-            raise ValueError("First argument must be either a vocabulary size (int)"
-                             " or the path to a pretrained model config file (str)")
+            raise ValueError(
+                "First argument must be either a vocabulary size (int)"
+                " or the path to a pretrained model config file (str)"
+            )
 
     @property
     def max_position_embeddings(self):

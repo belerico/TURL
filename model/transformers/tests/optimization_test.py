@@ -12,25 +12,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
-import unittest
 import os
-import pytest
+import unittest
 
+import pytest
 from transformers import is_torch_available
 
 if is_torch_available():
     import torch
-
-    from transformers import (AdamW,
-                              get_constant_schedule,
-                              get_constant_schedule_with_warmup,
-                              get_cosine_schedule_with_warmup,
-                              get_cosine_with_hard_restarts_schedule_with_warmup,
-                              get_linear_schedule_with_warmup)
+    from transformers import (
+        AdamW,
+        get_constant_schedule,
+        get_constant_schedule_with_warmup,
+        get_cosine_schedule_with_warmup,
+        get_cosine_with_hard_restarts_schedule_with_warmup,
+        get_linear_schedule_with_warmup,
+    )
 else:
     pytestmark = pytest.mark.skip("Require Torch")
 
@@ -44,6 +43,7 @@ def unwrap_schedule(scheduler, num_steps=10):
         lrs.append(scheduler.get_lr())
     return lrs
 
+
 def unwrap_and_save_reload_schedule(scheduler, num_steps=10):
     lrs = []
     for step in range(num_steps):
@@ -51,15 +51,15 @@ def unwrap_and_save_reload_schedule(scheduler, num_steps=10):
         lrs.append(scheduler.get_lr())
         if step == num_steps // 2:
             with TemporaryDirectory() as tmpdirname:
-                file_name = os.path.join(tmpdirname, 'schedule.bin')
+                file_name = os.path.join(tmpdirname, "schedule.bin")
                 torch.save(scheduler.state_dict(), file_name)
 
                 state_dict = torch.load(file_name)
                 scheduler.load_state_dict(state_dict)
     return lrs
 
-class OptimizationTest(unittest.TestCase):
 
+class OptimizationTest(unittest.TestCase):
     def assertListAlmostEqual(self, list1, list2, tol):
         self.assertEqual(len(list1), len(list2))
         for a, b in zip(list1, list2):
@@ -75,14 +75,14 @@ class OptimizationTest(unittest.TestCase):
             loss = criterion(w, target)
             loss.backward()
             optimizer.step()
-            w.grad.detach_() # No zero_grad() function on simple tensors. we do it ourselves.
+            w.grad.detach_()  # No zero_grad() function on simple tensors. we do it ourselves.
             w.grad.zero_()
         self.assertListAlmostEqual(w.tolist(), [0.4, 0.2, -0.5], tol=1e-2)
 
 
 class ScheduleInitTest(unittest.TestCase):
     m = torch.nn.Linear(50, 50) if is_torch_available() else None
-    optimizer = AdamW(m.parameters(), lr=10.) if is_torch_available() else None
+    optimizer = AdamW(m.parameters(), lr=10.0) if is_torch_available() else None
     num_steps = 10
 
     def assertListAlmostEqual(self, list1, list2, tol):
@@ -93,7 +93,7 @@ class ScheduleInitTest(unittest.TestCase):
     def test_constant_scheduler(self):
         scheduler = get_constant_schedule(self.optimizer)
         lrs = unwrap_schedule(scheduler, self.num_steps)
-        expected_learning_rates = [10.] * self.num_steps
+        expected_learning_rates = [10.0] * self.num_steps
         self.assertEqual(len(lrs[0]), 1)
         self.assertListEqual([l[0] for l in lrs], expected_learning_rates)
 
@@ -135,13 +135,17 @@ class ScheduleInitTest(unittest.TestCase):
         self.assertListEqual([l[0] for l in lrs], [l[0] for l in lrs_2])
 
     def test_warmup_cosine_hard_restart_scheduler(self):
-        scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(self.optimizer, num_warmup_steps=2, num_cycles=2, num_training_steps=10)
+        scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
+            self.optimizer, num_warmup_steps=2, num_cycles=2, num_training_steps=10
+        )
         lrs = unwrap_schedule(scheduler, self.num_steps)
         expected_learning_rates = [5.0, 10.0, 8.53, 5.0, 1.46, 10.0, 8.53, 5.0, 1.46, 0.0]
         self.assertEqual(len(lrs[0]), 1)
         self.assertListAlmostEqual([l[0] for l in lrs], expected_learning_rates, tol=1e-2)
 
-        scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(self.optimizer, num_warmup_steps=2, num_cycles=2, num_training_steps=10)
+        scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
+            self.optimizer, num_warmup_steps=2, num_cycles=2, num_training_steps=10
+        )
         lrs_2 = unwrap_and_save_reload_schedule(scheduler, self.num_steps)
         self.assertListEqual([l[0] for l in lrs], [l[0] for l in lrs_2])
 

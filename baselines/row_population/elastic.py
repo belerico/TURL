@@ -11,18 +11,9 @@ This class is to be instantiated for each index.
 
 from pprint import pprint
 
-from elasticsearch import Elasticsearch
-from elasticsearch import helpers
+from elasticsearch import Elasticsearch, helpers
 
-ES_config = {
-  "hosts": [
-    "localhost:9200"
-  ],
-  "settings": {
-    "number_of_shards": 1,
-    "number_of_replicas": 0
-  }
-}
+ES_config = {"hosts": ["localhost:9200"], "settings": {"number_of_shards": 1, "number_of_replicas": 0}}
 ELASTIC_HOSTS = ES_config.get("host")
 ELASTIC_SETTINGS = ES_config.get("settings")
 
@@ -49,15 +40,12 @@ class Elastic(object):
         if analyzer not in {Elastic.ANALYZER_STOP, Elastic.ANALYZER_STOP_STEM}:
             print("Error: Analyzer", analyzer, "is not valid.")
             exit(0)
-        return {"type": "string",
-                "term_vector": "with_positions_offsets",
-                "analyzer": analyzer}
+        return {"type": "string", "term_vector": "with_positions_offsets", "analyzer": analyzer}
 
     @staticmethod
     def notanalyzed_field():
         """Returns the mapping for not-analyzed fields."""
-        return {"type": "string",
-                "index": "not_analyzed"}
+        return {"type": "string", "index": "not_analyzed"}
         # "similarity": Elastic.SIMILARITY}
 
     def __gen_similarity(self, model, params=None):
@@ -143,10 +131,10 @@ class Elastic(object):
 
         # sets the global index settings
         # number of shards should be always set to 1; otherwise the stats would not be correct
-        body["settings"] = {"analysis": self.__gen_analyzers(),
-                            "index": {"number_of_shards": 1,
-                                      "number_of_replicas": 0},
-                            }
+        body["settings"] = {
+            "analysis": self.__gen_analyzers(),
+            "index": {"number_of_shards": 1, "number_of_replicas": 0},
+        }
 
         # sets similarity function
         # If model is not BM25, a similarity module with the given model and params is defined
@@ -171,12 +159,7 @@ class Elastic(object):
         """
         actions = []
         for doc_id, doc in docs.items():
-            action = {
-                "_index": self.__index_name,
-                "_type": self.DOC_TYPE,
-                "_id": doc_id,
-                "_source": doc
-            }
+            action = {"_index": self.__index_name, "_type": self.DOC_TYPE, "_id": doc_id, "_source": doc}
             actions.append(action)
 
         if len(actions) > 0:
@@ -218,8 +201,9 @@ class Elastic(object):
         :param start: starting offset (default: 0)
         :return: dictionary of document IDs with scores
         """
-        hits = self.__es.search(index=self.__index_name, q=query, df=field, _source=False, size=num,
-                                from_=start)["hits"]["hits"]
+        hits = self.__es.search(index=self.__index_name, q=query, df=field, _source=False, size=num, from_=start)[
+            "hits"
+        ]["hits"]
         results = {}
         for hit in hits:
             results[hit["_id"]] = hit["_score"]
@@ -228,8 +212,7 @@ class Elastic(object):
     def estimate_number(self, query):
         """Search body, return the number of hits containg body"""
         try:
-            return self.__es.search(index=self.__index_name, q = query, _source=False, size=1,
-                                from_=0)["hits"]["total"]
+            return self.__es.search(index=self.__index_name, q=query, _source=False, size=1, from_=0)["hits"]["total"]
         except:
             return 0
 
@@ -243,8 +226,9 @@ class Elastic(object):
         :param start: starting offset (default: 0)
         :return: dictionary of document IDs with scores
         """
-        hits = self.__es.search(index=self.__index_name, body=body, _source=False, size=num,
-                                from_=start)["hits"]["hits"]
+        hits = self.__es.search(index=self.__index_name, body=body, _source=False, size=num, from_=start)["hits"][
+            "hits"
+        ]
         results = {}
         for hit in hits:
             results[hit["_id"]] = hit["_score"]
@@ -260,8 +244,7 @@ class Elastic(object):
     def estimate_number_complex(self, body):
         """Search body, return the number of hits containg body"""
         try:
-            return self.__es.search(index=self.__index_name, body=body, _source=False, size=1,
-                                from_=0)["hits"]["total"]
+            return self.__es.search(index=self.__index_name, body=body, _source=False, size=1, from_=0)["hits"]["total"]
         except:
             return 0
 
@@ -283,8 +266,9 @@ class Elastic(object):
         :param doc_id: document ID
         :param field: field name
         """
-        tv = self.__es.termvectors(index=self.__index_name, doc_type=self.DOC_TYPE, id=doc_id, fields=field,
-                                   term_statistics=term_stats)
+        tv = self.__es.termvectors(
+            index=self.__index_name, doc_type=self.DOC_TYPE, id=doc_id, fields=field, term_statistics=term_stats
+        )
         return tv.get("term_vectors", {}).get(field, {}).get("terms", {})
 
     def __get_coll_termvector(self, term, field):
@@ -323,7 +307,7 @@ class Elastic(object):
         return tv.get(term, {}).get("doc_freq", 0)
 
     def coll_term_freq(self, term, field):
-        """ Returns collection term frequency for the given field."""
+        """Returns collection term frequency for the given field."""
         tv = self.__get_coll_termvector(term, field)
         return tv.get(term, {}).get("ttf", 0)
 
@@ -366,29 +350,10 @@ if __name__ == "__main__":
     pprint(es.term_freqs(doc_id, field))
     person_id = "you"
     # search doc containing person_id
-    body = {
-        "query": {
-            "bool": {
-                "must": {
-                    "term": {"content": person_id}
-                }
-            }
-        }
-    }
+    body = {"query": {"bool": {"must": {"term": {"content": person_id}}}}}
     # search docs containing both person_id and a(analyzed)
     a = es.analyze_query("me")
-    body = {"query": {
-        "bool": {
-            "must": [
-                {
-                    "match": {"content": person_id}
-                },
-                {
-                    "match_phrase": {"content": a}
-                }
-            ]
-        }
-    }}
+    body = {"query": {"bool": {"must": [{"match": {"content": person_id}}, {"match_phrase": {"content": a}}]}}}
     print(es.search_complex(body, "content"))
     print(es.term_freqs(1, "content"))
 

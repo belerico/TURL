@@ -17,9 +17,7 @@ The available optimizers are
 """
 
 import logging
-import re
 import math
-from typing import Any, Dict, List, Tuple, Union
 
 import torch
 
@@ -114,9 +112,7 @@ class DenseSparseAdam(torch.optim.Optimizer):
                     exp_avg_update_values = grad_values.sub(old_exp_avg_values).mul_(1 - beta1)
                     exp_avg.add_(make_sparse(exp_avg_update_values))
                     old_exp_avg_sq_values = exp_avg_sq.sparse_mask(grad)._values()
-                    exp_avg_sq_update_values = (
-                        grad_values.pow(2).sub_(old_exp_avg_sq_values).mul_(1 - beta2)
-                    )
+                    exp_avg_sq_update_values = grad_values.pow(2).sub_(old_exp_avg_sq_values).mul_(1 - beta2)
                     exp_avg_sq.add_(make_sparse(exp_avg_sq_update_values))
 
                     # Dense addition again is intended, avoiding another sparse_mask

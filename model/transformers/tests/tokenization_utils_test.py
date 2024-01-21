@@ -12,16 +12,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import unittest
-import six
-import pytest
 
+import pytest
+import six
 from transformers import PreTrainedTokenizer
 from transformers.tokenization_gpt2 import GPT2Tokenizer
+
 
 class TokenizerUtilsTest(unittest.TestCase):
     @pytest.mark.slow
@@ -43,6 +42,7 @@ class TokenizerUtilsTest(unittest.TestCase):
 
     def test_pretrained_tokenizers(self):
         self.check_tokenizer_from_pretrained(GPT2Tokenizer)
+
 
 if __name__ == "__main__":
     unittest.main()

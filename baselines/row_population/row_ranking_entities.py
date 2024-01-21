@@ -4,21 +4,28 @@ Estimate P(E|e_i+1) of ranking entities in row population
 author: Shuo Zhang
 """
 
-from elastic import Elastic
-from row_evaluation import Row_evaluation
-from scorer import ScorerLM
-import math
 import json
-import re
-import pdb
-from tqdm import tqdm
-import numpy as np
+import math
 import os
+import pdb
 import pickle
+import re
+
+import numpy as np
+from elastic import Elastic
 from metric import mean_average_precision
+from row_evaluation import Row_evaluation
+from tqdm import tqdm
+
 
 class P_e_e(Row_evaluation):
-    def __init__(self, type_index_name="wikipedia_category",table_index_name="table_index_wikitable_train_jan_13",abstract_index_name="dbpedia_2015_10_abstract", lamda=0.5):
+    def __init__(
+        self,
+        type_index_name="wikipedia_category",
+        table_index_name="table_index_wikitable_train_jan_13",
+        abstract_index_name="dbpedia_2015_10_abstract",
+        lamda=0.5,
+    ):
         """
 
         :param index_name: name of index
@@ -39,8 +46,11 @@ class P_e_e(Row_evaluation):
         self.e_t = pickle.load(open("./data/entity_tables.pkl", "rb"))
 
     def rank_candidates(self, seed, c=None, l=None):
-        cand = list(self.find_candidates_e(seed_E=seed)) + list(self.find_candidates_c(seed_E=seed, c=c)) + list(
-            self.find_candidates_cat(seed_E=seed))
+        cand = (
+            list(self.find_candidates_e(seed_E=seed))
+            + list(self.find_candidates_c(seed_E=seed, c=c))
+            + list(self.find_candidates_cat(seed_E=seed))
+        )
         p_all = {}
         pee = self.estimate_pee(cand, seed)
         pce = self.estimate_pce(cand, c)
@@ -82,16 +92,16 @@ class P_e_e(Row_evaluation):
             elif n_e == 0:
                 p_all[entity] = (1 - self.__lambda) * sim  # /n_e_i
             else:
-                p_all[entity] = ((self.__lambda * (n_e_e / n_e) + (1 - self.__lambda) * sim))  # /n_e_i
+                p_all[entity] = self.__lambda * (n_e_e / n_e) + (1 - self.__lambda) * sim  # /n_e_i
         return p_all
-    
+
     def get_tnum_contain_seed_fast(self, seed):
         if not isinstance(seed, list):
             return len(self.e_t.get(seed, []))
         elif len(seed) == 1:
-            return len(self.e_t.get(seed[0],[]))
+            return len(self.e_t.get(seed[0], []))
         else:
-            current_set = set(self.e_t.get(seed[0],[]))
+            current_set = set(self.e_t.get(seed[0], []))
             for entity in seed[1:]:
                 current_set = current_set & set(self.e_t.get(entity, []))
             return len(current_set)
@@ -100,27 +110,13 @@ class P_e_e(Row_evaluation):
         """Generate and return search body"""
         body = {}
         if len(seed) == 1:  # One constraints
-            body = {
-                "query": {
-                    "bool": {
-                        "must": {
-                            "match": {"core_entity_n": seed[0]}
-                        }
-                    }
-                }
-            }
+            body = {"query": {"bool": {"must": {"match": {"core_entity_n": seed[0]}}}}}
         else:  # Multiple constraints
             must = []
             must.append({"match": {"core_entity_n": seed[0]}})
             for item in seed[1:]:
                 must.append({"match": {"core_entity_n": item}})
-            body = {
-                "query": {
-                    "bool": {
-                        "must": must
-                    }
-                }
-            }
+            body = {"query": {"bool": {"must": must}}}
         return body
 
     def estimate_pce(self, cand, c):
@@ -153,7 +149,8 @@ class P_e_e(Row_evaluation):
     def estimate_p(self, kb_l, kb_tf, kb_c_l, kb_c_tf, tf, c_l, tf_c, collection_l):
         """P(t_c|e_i+1)"""
         p_kb = self.__lambda * (kb_tf + self.__mu * kb_c_tf / kb_c_l) / (kb_l + self.__mu) + (1 - self.__lambda) * (
-            tf + self.__mu * tf_c / collection_l) / (c_l + self.__mu)
+            tf + self.__mu * tf_c / collection_l
+        ) / (c_l + self.__mu)
         if p_kb != 0:
             p_kb = math.log(p_kb)
         return p_kb
@@ -172,13 +169,16 @@ class P_e_e(Row_evaluation):
             except:
                 body = self.generate_search_body(entity_id, field="core_entity_n")
                 table_ids = self.__tes.search_complex(body).keys()  # Search table containing entity
-              # caption collection length
+            # caption collection length
             for t in caption:  # Iterate term in caption
                 term = self.__tes.analyze_query(t)
                 c_l, tf = 0, 0  # caption length, term freq
                 for table_id in table_ids:
                     if table_id not in table_term_cache:
-                        table_term_cache[table_id] = [self.__tes.term_freqs(table_id, "caption"), self.__tes.doc_length(table_id, "caption")]
+                        table_term_cache[table_id] = [
+                            self.__tes.term_freqs(table_id, "caption"),
+                            self.__tes.doc_length(table_id, "caption"),
+                        ]
                     c_l += table_term_cache[table_id][1]  # caption length
                     tf += table_term_cache[table_id][0].get(term, 0)  # caption term frequency
                 tf_c = self.__tes.coll_term_freq(term, "caption")
@@ -196,9 +196,9 @@ class P_e_e(Row_evaluation):
         collection_l = self.c_freq[0]
         for entity_id in cand:
             p = 0
-            c_l = self.e_c_freq.get(entity_id, [0,{}])[0]
+            c_l = self.e_c_freq.get(entity_id, [0, {}])[0]
             for t in caption:  # Iterate term in caption
-                tf = self.e_c_freq.get(entity_id, [0,{}])[1].get(t, 0)
+                tf = self.e_c_freq.get(entity_id, [0, {}])[1].get(t, 0)
                 tf_c = self.c_freq[1].get(t, 0)
                 p += self.estimate_p_nokb(tf, c_l, tf_c, collection_l)
             if p != 0:
@@ -245,8 +245,8 @@ class P_e_e(Row_evaluation):
         for entity in cand:
             p_all[entity] = 0
             for label in l:
-                n_e = self.e_h_freq.get(entity, [0,{}])[0]  # number of tables containing e_i+1
-                n_l_e = self.e_h_freq.get(entity, [0,{}])[1].get(label, 0)  # number of tables containing e_i+1&label
+                n_e = self.e_h_freq.get(entity, [0, {}])[0]  # number of tables containing e_i+1
+                n_l_e = self.e_h_freq.get(entity, [0, {}])[1].get(label, 0)  # number of tables containing e_i+1&label
 
                 table_ids = self.e_t[entity]
                 if table_ids != 0:
@@ -293,8 +293,8 @@ class P_e_e(Row_evaluation):
         p_l_theta = 0
         c_l = self.ht_freq[0]  # collection length
         for t in p_label:
-            l_l = self.e_ht_freq.get(entity_id, [0,{}])[0]  # table label length(table containing t)
-            t_f = self.e_ht_freq.get(entity_id, [0,{}])[1].get(t, 0)  # tf of label
+            l_l = self.e_ht_freq.get(entity_id, [0, {}])[0]  # table label length(table containing t)
+            t_f = self.e_ht_freq.get(entity_id, [0, {}])[1].get(t, 0)  # tf of label
             c_tf = self.ht_freq[1].get(t, 0)  # tf in collection
             if l_l + self.__mu != 0:
                 p = (t_f + self.__mu * c_tf / c_l) / (l_l + self.__mu)
@@ -311,30 +311,15 @@ class P_e_e(Row_evaluation):
         """Generate and return search body"""
         body = {}
         if len(query) == 1:
-            body = {
-                "query": {
-                    "bool": {
-                        "must": {
-                            "term": {"core_entity_n": query[0]}
-                        }
-                    }
-                }
-            }
+            body = {"query": {"bool": {"must": {"term": {"core_entity_n": query[0]}}}}}
         elif len(query) == 2:
             body = {
                 "query": {
-                    "bool": {
-                        "must": [
-                            {
-                                "match": {"core_entity_n": query[0]}
-                            },
-                            {
-                                "match_phrase": {"headings": query[1]}
-                            }
-                        ]
-                    }
-                }}
+                    "bool": {"must": [{"match": {"core_entity_n": query[0]}}, {"match_phrase": {"headings": query[1]}}]}
+                }
+            }
         return body
+
 
 def parse(h):
     """entity [A|B]----B"""
@@ -348,26 +333,31 @@ def label_replace(headings):
     """Only keep entity strings"""
     return [parse(i) for i in headings]
 
+
 def load_entity_vocab(data_dir, ignore_bad_title=True, min_ent_count=1):
     entity_vocab = {}
     bad_title = 0
     few_entity = 0
-    with open(os.path.join(data_dir, 'entity_vocab.txt'), 'r', encoding="utf-8") as f:
+    with open(os.path.join(data_dir, "entity_vocab.txt"), "r", encoding="utf-8") as f:
         for line in f:
-            _, entity_id, entity_title, entity_mid, count = line.strip().split('\t')
-            if ignore_bad_title and entity_title == '':
+            _, entity_id, entity_title, entity_mid, count = line.strip().split("\t")
+            if ignore_bad_title and entity_title == "":
                 bad_title += 1
             elif int(count) < min_ent_count:
                 few_entity += 1
             else:
                 entity_vocab[len(entity_vocab)] = {
-                    'wiki_id': int(entity_id),
-                    'wiki_title': entity_title,
-                    'mid': entity_mid,
-                    'count': count
+                    "wiki_id": int(entity_id),
+                    "wiki_title": entity_title,
+                    "mid": entity_mid,
+                    "count": count,
                 }
-    print('total number of entity: %d\nremove because of empty title: %d\nremove because count<%d: %d'%(len(entity_vocab),bad_title,min_ent_count,few_entity))
+    print(
+        "total number of entity: %d\nremove because of empty title: %d\nremove because count<%d: %d"
+        % (len(entity_vocab), bad_title, min_ent_count, few_entity)
+    )
     return entity_vocab
+
 
 if __name__ == "__main__":
     seed_num = 1
@@ -375,10 +365,10 @@ if __name__ == "__main__":
     eva = P_e_e()
     dev_result = {}
     data_dir = "./data"
-    entity_vocab = load_entity_vocab(data_dir,True, min_ent_count=2)
-    all_entity_set = set([item['wiki_id'] for _,item in entity_vocab.items()])
+    entity_vocab = load_entity_vocab(data_dir, True, min_ent_count=2)
+    all_entity_set = set([item["wiki_id"] for _, item in entity_vocab.items()])
     tables_ignored = 0
-    with open(os.path.join(data_dir,"dev_tables.jsonl"), 'r') as f:
+    with open(os.path.join(data_dir, "dev_tables.jsonl"), "r") as f:
         for line in tqdm(f):
             table = json.loads(line.strip())
             table_id = table.get("_id", "")
@@ -389,15 +379,15 @@ if __name__ == "__main__":
             rows = table.get("tableData", {})
             entity_columns = table.get("entityColumn", [])
             headers = [headers[j] for j in entity_columns]
-            entity_cells = np.array(table.get("entityCell",[[]]))
+            entity_cells = np.array(table.get("entityCell", [[]]))
             core_entities = []
             num_rows = len(rows)
             entities = []
 
             for i in range(num_rows):
                 for j in entity_columns:
-                    if entity_cells[i,j] == 1:
-                        entity = rows[i][j]['surfaceLinks'][0]['target']['id']
+                    if entity_cells[i, j] == 1:
+                        entity = rows[i][j]["surfaceLinks"][0]["target"]["id"]
                         if entity == "":
                             continue
                         entities.append(entity)
@@ -416,19 +406,22 @@ if __name__ == "__main__":
             # B = eva.find_core_candidates_c(seed, re.escape(catcallall), k)
             # C = eva.find_core_candidates_e(seed, k)
             # pdb.set_trace()
-            pall, pee, pce, ple, cand_e, cand_c = eva.rank_core_candidates(seed, re.escape(caption), [re.escape(headers[0])], num=k)
+            pall, pee, pce, ple, cand_e, cand_c = eva.rank_core_candidates(
+                seed, re.escape(caption), [re.escape(headers[0])], num=k
+            )
             target_entities = set(remained_core_entities[1:])
-            ranked_entities = [1 if z[0] in target_entities else 0 for z in sorted(pall.items(),key=lambda z:z[1],reverse=True)]
+            ranked_entities = [
+                1 if z[0] in target_entities else 0 for z in sorted(pall.items(), key=lambda z: z[1], reverse=True)
+            ]
             # dev_result[table_id] = [set(seed), B, C, B|C]
             dev_result[table_id] = [set(seed), target_entities, ranked_entities, pall, pee, pce, ple, cand_e, cand_c]
             # pdb.set_trace()
     # pdb.set_trace()
     # for i in range(3):
-        # print(np.mean([len(x[0]&x[i+1])/len(x[0]) for _,x in dev_result.items()]), np.mean([len(x[i+1])for _,x in dev_result.items()]))
-    print("tables ignored %d"%tables_ignored)
+    # print(np.mean([len(x[0]&x[i+1])/len(x[0]) for _,x in dev_result.items()]), np.mean([len(x[i+1])for _,x in dev_result.items()]))
+    print("tables ignored %d" % tables_ignored)
     pdb.set_trace()
-    print("map: %f"%mean_average_precision([z[2] for _,z in dev_result.items()]))
-    with open(os.path.join(data_dir, "dev_result.pkl"),"wb") as f:
+    print("map: %f" % mean_average_precision([z[2] for _, z in dev_result.items()]))
+    with open(os.path.join(data_dir, "dev_result.pkl"), "wb") as f:
         pickle.dump(dev_result, f)
     print("finish val")
-        

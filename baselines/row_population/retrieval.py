@@ -12,14 +12,14 @@ Console application for general-purpose retrieval.
 """
 import argparse
 import json
-
 import sys
 from pprint import pprint
 
 from Population.elastic import Elastic
 from Population.elastic_cache import ElasticCache
 from Population.scorer import Scorer, ScorerLM
-#from file_utils import FileUtils
+
+# from file_utils import FileUtils
 
 
 class Retrieval(object):
@@ -51,6 +51,7 @@ class Retrieval(object):
         }
 
     """
+
     FIELDED_MODELS = {"mlm", "prms", "fsdm"}
     LM_MODELS = {"lm", "mlm", "prms", "sdm", "fsdm"}
 
@@ -117,7 +118,9 @@ class Retrieval(object):
         :param analyzed_query: analyzed query
         :return: RetrievalResults object
         """
-        print("\tFirst pass scoring... ", )
+        print(
+            "\tFirst pass scoring... ",
+        )
         # todo: add support for other similarities
         # self.__elastic.update_similarity(self.__first_pass_model, self.__first_pass_model_params)
         res1 = self.__elastic.search(analyzed_query, self.__first_pass_field, num=self.__first_pass_num_docs)
@@ -130,7 +133,9 @@ class Retrieval(object):
         :param scorer: scorer object
         :return: RetrievalResults object
         """
-        print("\tSecond pass scoring... ", )
+        print(
+            "\tSecond pass scoring... ",
+        )
         res2 = {}
         for doc_id in res1.keys():
             res2[doc_id] = scorer.score_doc(doc_id)
@@ -189,21 +194,20 @@ def arg_parser():
 
 
 def main():
-    dbpedia_config = {"index_name": "dbpedia_2015_10",
-                      "first_pass": {
-                          "num_docs": 1000
-                      },
-                      "second_pass": {
-                          "model": "lm",
-                          "num_docs": 1000,
-                          "smoothing_method": "dirichlet",
-                          "smoothing_param": 2000,
-                          "field_weights": {"catchall": 0.4, "related_entity_names": 0.2, "categories": 0.4}
-                      },
-                      # "query_file": "data/queries/dbpedia-entity.json",
-                      # "output_file": "output/mlm_tc.txt",
-                      "run_id": "mlm_tc"
-                      }
+    dbpedia_config = {
+        "index_name": "dbpedia_2015_10",
+        "first_pass": {"num_docs": 1000},
+        "second_pass": {
+            "model": "lm",
+            "num_docs": 1000,
+            "smoothing_method": "dirichlet",
+            "smoothing_param": 2000,
+            "field_weights": {"catchall": 0.4, "related_entity_names": 0.2, "categories": 0.4},
+        },
+        # "query_file": "data/queries/dbpedia-entity.json",
+        # "output_file": "output/mlm_tc.txt",
+        "run_id": "mlm_tc",
+    }
     r = Retrieval(dbpedia_config)
     pprint(r.retrieve("gonna"))
 

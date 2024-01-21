@@ -14,56 +14,53 @@
 # limitations under the License.
 from __future__ import absolute_import, division, print_function
 
-import os
 import copy
-import json
-import logging
-import importlib
+import os
 import random
 import shutil
-import unittest
-import uuid
+import sys
 import tempfile
+import unittest
 
 import pytest
-import sys
-
 from transformers import is_tf_available, is_torch_available
 
 if is_tf_available():
-    import tensorflow as tf
     import numpy as np
-    from transformers import TFPreTrainedModel
+    import tensorflow as tf
+
     # from transformers.modeling_bert import BertModel, BertConfig, BERT_PRETRAINED_MODEL_ARCHIVE_MAP
 else:
     pytestmark = pytest.mark.skip("Require TensorFlow")
 
 if sys.version_info[0] == 2:
-    import cPickle as pickle
+    pass
 
     class TemporaryDirectory(object):
         """Context manager for tempfile.mkdtemp() so it's usable with "with" statement."""
+
         def __enter__(self):
             self.name = tempfile.mkdtemp()
             return self.name
+
         def __exit__(self, exc_type, exc_value, traceback):
             shutil.rmtree(self.name)
+
 else:
-    import pickle
     TemporaryDirectory = tempfile.TemporaryDirectory
     unicode = str
+
 
 def _config_zero_init(config):
     configs_no_init = copy.deepcopy(config)
     for key in configs_no_init.__dict__.keys():
-        if '_range' in key or '_std' in key:
+        if "_range" in key or "_std" in key:
             setattr(configs_no_init, key, 0.0)
     return configs_no_init
 
+
 class TFCommonTestCases:
-
     class TFCommonModelTester(unittest.TestCase):
-
         model_tester = None
         all_model_classes = ()
         test_torchscript = True
@@ -125,8 +122,9 @@ class TFCommonTestCases:
 
                 # Check predictions on first output (logits/hidden-states) are close enought given low-level computational differences
                 pt_model.eval()
-                pt_inputs_dict = dict((name, torch.from_numpy(key.numpy()).to(torch.long))
-                                      for name, key in inputs_dict.items())
+                pt_inputs_dict = dict(
+                    (name, torch.from_numpy(key.numpy()).to(torch.long)) for name, key in inputs_dict.items()
+                )
                 with torch.no_grad():
                     pto = pt_model(**pt_inputs_dict)
                 tfo = tf_model(inputs_dict)
@@ -135,18 +133,19 @@ class TFCommonTestCases:
 
                 # Check we can load pt model in tf and vice-versa with checkpoint => model functions
                 with TemporaryDirectory() as tmpdirname:
-                    pt_checkpoint_path = os.path.join(tmpdirname, 'pt_model.bin')
+                    pt_checkpoint_path = os.path.join(tmpdirname, "pt_model.bin")
                     torch.save(pt_model.state_dict(), pt_checkpoint_path)
                     tf_model = transformers.load_pytorch_checkpoint_in_tf2_model(tf_model, pt_checkpoint_path)
 
-                    tf_checkpoint_path = os.path.join(tmpdirname, 'tf_model.h5')
+                    tf_checkpoint_path = os.path.join(tmpdirname, "tf_model.h5")
                     tf_model.save_weights(tf_checkpoint_path)
                     pt_model = transformers.load_tf2_checkpoint_in_pytorch_model(pt_model, tf_checkpoint_path)
 
                 # Check predictions on first output (logits/hidden-states) are close enought given low-level computational differences
                 pt_model.eval()
-                pt_inputs_dict = dict((name, torch.from_numpy(key.numpy()).to(torch.long))
-                                      for name, key in inputs_dict.items())
+                pt_inputs_dict = dict(
+                    (name, torch.from_numpy(key.numpy()).to(torch.long)) for name, key in inputs_dict.items()
+                )
                 with torch.no_grad():
                     pto = pt_model(**pt_inputs_dict)
                 tfo = tf_model(inputs_dict)
@@ -156,15 +155,15 @@ class TFCommonTestCases:
         def test_compile_tf_model(self):
             config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
 
-            input_ids = tf.keras.Input(batch_shape=(2, 2000), name='input_ids', dtype='int32')
+            input_ids = tf.keras.Input(batch_shape=(2, 2000), name="input_ids", dtype="int32")
             optimizer = tf.keras.optimizers.Adam(learning_rate=3e-5, epsilon=1e-08, clipnorm=1.0)
             loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-            metric = tf.keras.metrics.SparseCategoricalAccuracy('accuracy')
+            metric = tf.keras.metrics.SparseCategoricalAccuracy("accuracy")
 
             for model_class in self.all_model_classes:
                 # Prepare our model
                 model = model_class(config)
-                
+
                 # Let's load it from the disk to be sure we can use pretrained weights
                 with TemporaryDirectory() as tmpdirname:
                     outputs = model(inputs_dict)  # build the model
@@ -175,7 +174,7 @@ class TFCommonTestCases:
                 hidden_states = outputs_dict[0]
 
                 # Add a dense layer on top to test intetgration with other keras modules
-                outputs = tf.keras.layers.Dense(2, activation='softmax', name='outputs')(hidden_states)
+                outputs = tf.keras.layers.Dense(2, activation="softmax", name="outputs")(hidden_states)
 
                 # Compile extended model
                 extended_model = tf.keras.Model(inputs=[input_ids], outputs=[outputs])
@@ -189,7 +188,7 @@ class TFCommonTestCases:
                 outputs_dict = model(inputs_dict)
 
                 inputs_keywords = copy.deepcopy(inputs_dict)
-                input_ids = inputs_keywords.pop('input_ids')
+                input_ids = inputs_keywords.pop("input_ids")
                 outputs_keywords = model(input_ids, **inputs_keywords)
 
                 output_dict = outputs_dict[0].numpy()
@@ -211,9 +210,14 @@ class TFCommonTestCases:
                 self.assertEqual(len(attentions), self.model_tester.num_hidden_layers)
                 self.assertListEqual(
                     list(attentions[0].shape[-3:]),
-                    [self.model_tester.num_attention_heads,
-                    self.model_tester.seq_length,
-                    self.model_tester.key_len if hasattr(self.model_tester, 'key_len') else self.model_tester.seq_length])
+                    [
+                        self.model_tester.num_attention_heads,
+                        self.model_tester.seq_length,
+                        self.model_tester.key_len
+                        if hasattr(self.model_tester, "key_len")
+                        else self.model_tester.seq_length,
+                    ],
+                )
                 out_len = len(outputs)
 
                 # Check attention is always last and order is fine
@@ -221,7 +225,7 @@ class TFCommonTestCases:
                 config.output_hidden_states = True
                 model = model_class(config)
                 outputs = model(inputs_dict)
-                self.assertEqual(out_len+1, len(outputs))
+                self.assertEqual(out_len + 1, len(outputs))
                 self.assertEqual(model.config.output_attentions, True)
                 self.assertEqual(model.config.output_hidden_states, True)
 
@@ -229,9 +233,14 @@ class TFCommonTestCases:
                 self.assertEqual(len(attentions), self.model_tester.num_hidden_layers)
                 self.assertListEqual(
                     list(attentions[0].shape[-3:]),
-                    [self.model_tester.num_attention_heads,
-                    self.model_tester.seq_length,
-                    self.model_tester.key_len if hasattr(self.model_tester, 'key_len') else self.model_tester.seq_length])
+                    [
+                        self.model_tester.num_attention_heads,
+                        self.model_tester.seq_length,
+                        self.model_tester.key_len
+                        if hasattr(self.model_tester, "key_len")
+                        else self.model_tester.seq_length,
+                    ],
+                )
 
         def test_headmasking(self):
             pass
@@ -245,7 +254,7 @@ class TFCommonTestCases:
             #     model.eval()
 
             #     # Prepare head_mask
-            #     # Set require_grad after having prepared the tensor to avoid error (leaf variable has been moved into the graph interior) 
+            #     # Set require_grad after having prepared the tensor to avoid error (leaf variable has been moved into the graph interior)
             #     head_mask = torch.ones(self.model_tester.num_hidden_layers, self.model_tester.num_attention_heads)
             #     head_mask[0, 0] = 0
             #     head_mask[-1, :-1] = 0
@@ -279,7 +288,6 @@ class TFCommonTestCases:
             #     self.assertNotEqual(
             #         attentions[-1][..., -1, :, :].flatten().sum().item(), 0.0)
 
-
         def test_head_pruning(self):
             pass
             # if not self.test_pruning:
@@ -306,7 +314,6 @@ class TFCommonTestCases:
             #     self.assertEqual(
             #         attentions[-1].shape[-3], self.model_tester.num_attention_heads - 1)
 
-
         def test_hidden_states_output(self):
             config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
 
@@ -320,9 +327,8 @@ class TFCommonTestCases:
                 self.assertEqual(model.config.output_hidden_states, True)
                 self.assertEqual(len(hidden_states), self.model_tester.num_hidden_layers + 1)
                 self.assertListEqual(
-                    list(hidden_states[0].shape[-2:]),
-                    [self.model_tester.seq_length, self.model_tester.hidden_size])
-
+                    list(hidden_states[0].shape[-2:]), [self.model_tester.seq_length, self.model_tester.hidden_size]
+                )
 
         def test_resize_tokens_embeddings(self):
             pass
@@ -359,7 +365,6 @@ class TFCommonTestCases:
 
             #     self.assertTrue(models_equal)
 
-
         def test_model_common_attributes(self):
             config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
 
@@ -368,7 +373,6 @@ class TFCommonTestCases:
                 assert isinstance(model.get_input_embeddings(), tf.keras.layers.Layer)
                 x = model.get_output_embeddings()
                 assert x is None or isinstance(x, tf.keras.layers.Layer)
-
 
         def test_tie_model_weights(self):
             pass
@@ -430,7 +434,7 @@ class TFCommonTestCases:
                 # ^^ In our TF models, the input_embeddings can take slightly different forms,
                 # so we try two of them and fall back to just synthetically creating a dummy tensor of ones.
                 inputs_dict["inputs_embeds"] = x
-                outputs = model(inputs_dict)
+                model(inputs_dict)
 
 
 def ids_tensor(shape, vocab_size, rng=None, name=None, dtype=None):
@@ -446,15 +450,13 @@ def ids_tensor(shape, vocab_size, rng=None, name=None, dtype=None):
     for _ in range(total_dims):
         values.append(rng.randint(0, vocab_size - 1))
 
-    output = tf.constant(values,
-                         shape=shape,
-                         dtype=dtype if dtype is not None else tf.int32)
+    output = tf.constant(values, shape=shape, dtype=dtype if dtype is not None else tf.int32)
 
     return output
 
 
 class TFModelUtilsTest(unittest.TestCase):
-    @pytest.mark.skipif('tensorflow' not in sys.modules, reason="requires TensorFlow")
+    @pytest.mark.skipif("tensorflow" not in sys.modules, reason="requires TensorFlow")
     def test_model_from_pretrained(self):
         pass
         # logging.basicConfig(level=logging.INFO)

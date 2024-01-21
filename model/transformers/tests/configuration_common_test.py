@@ -12,19 +12,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
-import copy
-import os
-import shutil
 import json
-import random
-import uuid
-
+import os
 import unittest
-import logging
+import uuid
 
 
 class ConfigTester(object):
@@ -35,10 +28,10 @@ class ConfigTester(object):
 
     def create_and_test_config_common_properties(self):
         config = self.config_class(**self.inputs_dict)
-        self.parent.assertTrue(hasattr(config, 'vocab_size'))
-        self.parent.assertTrue(hasattr(config, 'hidden_size'))
-        self.parent.assertTrue(hasattr(config, 'num_attention_heads'))
-        self.parent.assertTrue(hasattr(config, 'num_hidden_layers'))
+        self.parent.assertTrue(hasattr(config, "vocab_size"))
+        self.parent.assertTrue(hasattr(config, "hidden_size"))
+        self.parent.assertTrue(hasattr(config, "num_attention_heads"))
+        self.parent.assertTrue(hasattr(config, "num_hidden_layers"))
 
     def create_and_test_config_to_json_string(self):
         config = self.config_class(**self.inputs_dict)
@@ -58,6 +51,7 @@ class ConfigTester(object):
         self.create_and_test_config_common_properties()
         self.create_and_test_config_to_json_string()
         self.create_and_test_config_to_json_file()
+
 
 if __name__ == "__main__":
     unittest.main()

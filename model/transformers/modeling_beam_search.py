@@ -61,12 +61,8 @@ class TransformerBeamSearch(nn.Module):
         # State of the beam
         self.hypotheses = [[] for _ in range(batch_size)]
         self.batch_offset = torch.arange(batch_size, dtype=torch.long)
-        self.beam_offset = torch.arange(
-            0, batch_size * self.beam_size, step=self.beam_size, dtype=torch.long
-        )
-        self.growing_beam = torch.full(
-            (batch_size * self.beam_size, 1), self.start_token_id, dtype=torch.long
-        )
+        self.beam_offset = torch.arange(0, batch_size * self.beam_size, step=self.beam_size, dtype=torch.long)
+        self.growing_beam = torch.full((batch_size * self.beam_size, 1), self.start_token_id, dtype=torch.long)
         self.topk_log_probabilities = torch.tensor(
             [0.0] + [float("-inf")] * (self.beam_size - 1), dtype=torch.float
         ).repeat(batch_size)
@@ -78,7 +74,7 @@ class TransformerBeamSearch(nn.Module):
         self.is_done = False
 
     def step(self, log_probabilities):
-        """ Grows the beam by one step. """
+        """Grows the beam by one step."""
         self._step += 1
 
         # The batch size changes as some beams finish so we define _B
@@ -112,9 +108,7 @@ class TransformerBeamSearch(nn.Module):
 
         # Retrieve the row index of the surviving beams in the original
         # view of the log_probabilities tensor
-        surviving_beams_rows = (topk_beam_ids + self.beam_offset[:_B].view(-1, 1)).view(
-            -1
-        )
+        surviving_beams_rows = (topk_beam_ids + self.beam_offset[:_B].view(-1, 1)).view(-1)
 
         # Append the last predictions
         self.growing_beam = torch.cat(
@@ -134,9 +128,7 @@ class TransformerBeamSearch(nn.Module):
 
         # Save the finished searches
         if is_finished.any():
-            predictions = self.growing_beam.view(
-                -1, self.beam_size, self.growing_beam.size(1)
-            )
+            predictions = self.growing_beam.view(-1, self.beam_size, self.growing_beam.size(1))
             for i in range(is_finished.size(0)):
                 if is_top_beam_finished[i]:
                     is_finished[i].fill_(1)
@@ -150,9 +142,7 @@ class TransformerBeamSearch(nn.Module):
                 # If the batch reached the end, save the best hypotheses
                 # in terms of length-penalized score.
                 if is_top_beam_finished[i]:
-                    best_hyp = sorted(
-                        self.hypotheses[b], key=lambda x: x[0], reverse=True
-                    )
+                    best_hyp = sorted(self.hypotheses[b], key=lambda x: x[0], reverse=True)
                     best_score, best_prediction = best_hyp[0]
                     self.results["scores"][b].append(best_score)
                     self.results["predictions"][b].append(best_prediction)
@@ -162,13 +152,9 @@ class TransformerBeamSearch(nn.Module):
                 self.is_done = True
 
             # Remove finished batches for the next step.
-            topk_log_probabilities = topk_log_probabilities.index_select(
-                0, non_finished
-            )
+            topk_log_probabilities = topk_log_probabilities.index_select(0, non_finished)
             self.batch_offset = self.batch_offset.index_select(0, non_finished)
-            self.growing_beam = predictions.index_select(0, non_finished).view(
-                -1, self.growing_beam.size(-1)
-            )
+            self.growing_beam = predictions.index_select(0, non_finished).view(-1, self.growing_beam.size(-1))
 
             surviving_beams_rows = surviving_beams_rows.index_select(0, non_finished)
 
@@ -180,14 +166,10 @@ class TransformerBeamSearch(nn.Module):
         # that apply to the model as whole.
         # We let the specific kwargs override the common ones in case of conflict.
         kwargs_encoder = {
-            argument[len("encoder_"):]: value
-            for argument, value in kwargs.items()
-            if argument.startswith("encoder_")
+            argument[len("encoder_") :]: value for argument, value in kwargs.items() if argument.startswith("encoder_")
         }
         kwargs_decoder = {
-            argument[len("decoder_"):]: value
-            for argument, value in kwargs.items()
-            if argument.startswith("decoder_")
+            argument[len("decoder_") :]: value for argument, value in kwargs.items() if argument.startswith("decoder_")
         }
         kwargs_common = {
             argument: value
@@ -199,14 +181,10 @@ class TransformerBeamSearch(nn.Module):
 
         # forward pass on the encoder
         encoder_outputs = self.model.encoder.forward(encoder_input_ids, kwargs_encoder)
-        kwargs_decoder["encoder_hidden_states"] = tile(
-            encoder_outputs, self.beam_size, dim=0
-        )
+        kwargs_decoder["encoder_hidden_states"] = tile(encoder_outputs, self.beam_size, dim=0)
 
         # grow the beam by generating sequences in an autoregressive way
-        self.growing_beam = torch.full(
-            (self.batch_size * self.beam_size, 1), self.start_token_id, dtype=torch.long
-        )
+        self.growing_beam = torch.full((self.batch_size * self.beam_size, 1), self.start_token_id, dtype=torch.long)
         for step in range(self.max_length):
             decoder_input = self.growing_beam[:, -1]
             outputs = self.model.decoder(decoder_input, kwargs_decoder)
@@ -215,17 +193,17 @@ class TransformerBeamSearch(nn.Module):
             if self.is_done:
                 break
 
-            kwargs_decoder["encoder_hidden_states"] = kwargs_decoder[
-                "encoder_hidden_states"
-            ].index_select(0, surviving_beams_rows)
+            kwargs_decoder["encoder_hidden_states"] = kwargs_decoder["encoder_hidden_states"].index_select(
+                0, surviving_beams_rows
+            )
 
         return self.results
 
     def remove_repeating_trigrams(self, log_probabilities, _B):
-        if(self._step + 1 > 3):
+        if self._step + 1 > 3:
             for i in range(_B * self.beam_size):
                 tokens = [t for t in self.growing_beam[i]]
-                trigrams = [(tokens[i-1], tokens[i], tokens[i+1]) for i in range(1, len(words) - 1)]
+                trigrams = [(tokens[i - 1], tokens[i], tokens[i + 1]) for i in range(1, len(words) - 1)]
                 last_trigram = tuple(trigrams[-1])
                 if last_trigram in trigrams[:-1]:
                     log_probabilities[i] = -1e20
@@ -258,14 +236,7 @@ def tile(x, count, dim=0):
     out_size = list(x.size())
     out_size[0] *= count
     batch = x.size(0)
-    x = (
-        x.view(batch, -1)
-        .transpose(0, 1)
-        .repeat(count, 1)
-        .transpose(0, 1)
-        .contiguous()
-        .view(*out_size)
-    )
+    x = x.view(batch, -1).transpose(0, 1).repeat(count, 1).transpose(0, 1).contiguous().view(*out_size)
     if dim != 0:
         x = x.permute(perm).contiguous()
     return x

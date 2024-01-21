@@ -29,11 +29,11 @@ logger = logging.getLogger(__name__)
 
 class PreTrainedEncoderDecoder(nn.Module):
     r"""
-        :class:`~transformers.PreTrainedEncoderDecoder` is a generic model class that will be
-        instantiated as a transformer architecture with one of the base model
-        classes of the library as encoder and (optionally) another one as
-        decoder when created with the `AutoModel.from_pretrained(pretrained_model_name_or_path)`
-        class method.
+    :class:`~transformers.PreTrainedEncoderDecoder` is a generic model class that will be
+    instantiated as a transformer architecture with one of the base model
+    classes of the library as encoder and (optionally) another one as
+    decoder when created with the `AutoModel.from_pretrained(pretrained_model_name_or_path)`
+    class method.
     """
 
     def __init__(self, encoder, decoder):
@@ -47,9 +47,9 @@ class PreTrainedEncoderDecoder(nn.Module):
         encoder_pretrained_model_name_or_path=None,
         decoder_pretrained_model_name_or_path=None,
         *model_args,
-        **kwargs
+        **kwargs,
     ):
-        r""" Instantiates an encoder and a decoder from one or two base classes of the library from pre-trained model checkpoints.
+        r"""Instantiates an encoder and a decoder from one or two base classes of the library from pre-trained model checkpoints.
 
 
         The model is set in evaluation mode by default using `model.eval()` (Dropout modules are deactivated)
@@ -117,8 +117,7 @@ class PreTrainedEncoderDecoder(nn.Module):
         kwargs_common = {
             argument: value
             for argument, value in kwargs.items()
-            if not argument.startswith("encoder_")
-            and not argument.startswith("decoder_")
+            if not argument.startswith("encoder_") and not argument.startswith("decoder_")
         }
         kwargs_decoder = kwargs_common.copy()
         kwargs_encoder = kwargs_common.copy()
@@ -142,16 +141,12 @@ class PreTrainedEncoderDecoder(nn.Module):
         # by the value of the flag `is_decoder` that we need to set correctly.
         encoder = kwargs_encoder.pop("model", None)
         if encoder is None:
-            encoder = AutoModel.from_pretrained(
-                encoder_pretrained_model_name_or_path, *model_args, **kwargs_encoder
-            )
+            encoder = AutoModel.from_pretrained(encoder_pretrained_model_name_or_path, *model_args, **kwargs_encoder)
         encoder.config.is_decoder = False
 
         decoder = kwargs_decoder.pop("model", None)
         if decoder is None:
-            decoder = AutoModelWithLMHead.from_pretrained(
-                decoder_pretrained_model_name_or_path, **kwargs_decoder
-            )
+            decoder = AutoModelWithLMHead.from_pretrained(decoder_pretrained_model_name_or_path, **kwargs_decoder)
         decoder.config.is_decoder = True
 
         model = cls(encoder, decoder)
@@ -159,7 +154,7 @@ class PreTrainedEncoderDecoder(nn.Module):
         return model
 
     def save_pretrained(self, save_directory):
-        """ Save a Seq2Seq model and its configuration file in a format such
+        """Save a Seq2Seq model and its configuration file in a format such
         that it can be loaded using `:func:`~transformers.PreTrainedEncoderDecoder.from_pretrained`
 
         We save the encoder' and decoder's parameters in two separate directories.
@@ -168,7 +163,7 @@ class PreTrainedEncoderDecoder(nn.Module):
         self.decoder.save_pretrained(os.path.join(save_directory, "decoder"))
 
     def forward(self, encoder_input_ids, decoder_input_ids, **kwargs):
-        """ The forward pass on a seq2eq depends what we are performing:
+        """The forward pass on a seq2eq depends what we are performing:
 
         - During training we perform one forward pass through both the encoder
           and decoder;
@@ -193,8 +188,7 @@ class PreTrainedEncoderDecoder(nn.Module):
         kwargs_common = {
             argument: value
             for argument, value in kwargs.items()
-            if not argument.startswith("encoder_")
-            and not argument.startswith("decoder_")
+            if not argument.startswith("encoder_") and not argument.startswith("decoder_")
         }
         kwargs_decoder = kwargs_common.copy()
         kwargs_encoder = kwargs_common.copy()
@@ -217,17 +211,13 @@ class PreTrainedEncoderDecoder(nn.Module):
         encoder_hidden_states = kwargs_encoder.pop("hidden_states", None)
         if encoder_hidden_states is None:
             encoder_outputs = self.encoder(encoder_input_ids, **kwargs_encoder)
-            encoder_hidden_states = encoder_outputs[
-                0
-            ]  # output the last layer hidden state
+            encoder_hidden_states = encoder_outputs[0]  # output the last layer hidden state
         else:
             encoder_outputs = ()
 
         # Decode
         kwargs_decoder["encoder_hidden_states"] = encoder_hidden_states
-        kwargs_decoder["encoder_attention_mask"] = kwargs_encoder.get(
-            "attention_mask", None
-        )
+        kwargs_decoder["encoder_attention_mask"] = kwargs_encoder.get("attention_mask", None)
         decoder_outputs = self.decoder(decoder_input_ids, **kwargs_decoder)
 
         return decoder_outputs + encoder_outputs
@@ -235,19 +225,19 @@ class PreTrainedEncoderDecoder(nn.Module):
 
 class Model2Model(PreTrainedEncoderDecoder):
     r"""
-        :class:`~transformers.Model2Model` instantiates a Seq2Seq2 model
-        where both of the encoder and decoder are of the same family. If the
-        name of or that path to a pretrained model is specified the encoder and
-        the decoder will be initialized with the pretrained weight (the
-        cross-attention will be intialized randomly if its weights are not
-        present).
+    :class:`~transformers.Model2Model` instantiates a Seq2Seq2 model
+    where both of the encoder and decoder are of the same family. If the
+    name of or that path to a pretrained model is specified the encoder and
+    the decoder will be initialized with the pretrained weight (the
+    cross-attention will be intialized randomly if its weights are not
+    present).
 
-        It is possible to override this behavior and initialize, say, the decoder randomly
-        by creating it beforehand as follows
+    It is possible to override this behavior and initialize, say, the decoder randomly
+    by creating it beforehand as follows
 
-            config = BertConfig.from_pretrained()
-            decoder = BertForMaskedLM(config)
-            model = Model2Model.from_pretrained('bert-base-uncased', decoder_model=decoder)
+        config = BertConfig.from_pretrained()
+        decoder = BertForMaskedLM(config)
+        model = Model2Model.from_pretrained('bert-base-uncased', decoder_model=decoder)
     """
 
     def __init__(self, *args, **kwargs):
@@ -255,26 +245,24 @@ class Model2Model(PreTrainedEncoderDecoder):
         self.tie_weights()
 
     def tie_weights(self):
-        """ Tying the encoder and decoders' embeddings together.
+        """Tying the encoder and decoders' embeddings together.
 
-       We need for each to get down to the embedding weights. However the
-        different model classes are inconsistent to that respect:
-        - BertModel: embeddings.word_embeddings
-        - RoBERTa: embeddings.word_embeddings
-        - XLMModel: embeddings
-        - GPT2: wte
-        - BertForMaskedLM: bert.embeddings.word_embeddings
-        - RobertaForMaskedLM: roberta.embeddings.word_embeddings
+        We need for each to get down to the embedding weights. However the
+         different model classes are inconsistent to that respect:
+         - BertModel: embeddings.word_embeddings
+         - RoBERTa: embeddings.word_embeddings
+         - XLMModel: embeddings
+         - GPT2: wte
+         - BertForMaskedLM: bert.embeddings.word_embeddings
+         - RobertaForMaskedLM: roberta.embeddings.word_embeddings
 
-        argument of the XEmbedding layer for each model, but it is "blocked"
-        by a model-specific keyword (bert, )...
+         argument of the XEmbedding layer for each model, but it is "blocked"
+         by a model-specific keyword (bert, )...
         """
         # self._tie_or_clone_weights(self.encoder, self.decoder)
-        pass
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
-
         if (
             "bert" not in pretrained_model_name_or_path
             or "roberta" in pretrained_model_name_or_path
@@ -286,7 +274,7 @@ class Model2Model(PreTrainedEncoderDecoder):
             encoder_pretrained_model_name_or_path=pretrained_model_name_or_path,
             decoder_pretrained_model_name_or_path=pretrained_model_name_or_path,
             *args,
-            **kwargs
+            **kwargs,
         )
 
         return model

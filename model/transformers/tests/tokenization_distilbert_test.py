@@ -14,18 +14,15 @@
 # limitations under the License.
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import os
 import unittest
+
 import pytest
-from io import open
+from transformers.tokenization_distilbert import DistilBertTokenizer
 
-from transformers.tokenization_distilbert import (DistilBertTokenizer)
-
-from .tokenization_tests_commons import CommonTestCases
 from .tokenization_bert_test import BertTokenizationTest
 
-class DistilBertTokenizationTest(BertTokenizationTest):
 
+class DistilBertTokenizationTest(BertTokenizationTest):
     tokenizer_class = DistilBertTokenizer
 
     def get_tokenizer(self, **kwargs):
@@ -42,9 +39,10 @@ class DistilBertTokenizationTest(BertTokenizationTest):
         encoded_pair = tokenizer.build_inputs_with_special_tokens(text, text_2)
 
         assert encoded_sentence == [tokenizer.cls_token_id] + text + [tokenizer.sep_token_id]
-        assert encoded_pair == [tokenizer.cls_token_id] + text + [tokenizer.sep_token_id] + \
-               text_2 + [tokenizer.sep_token_id]
+        assert encoded_pair == [tokenizer.cls_token_id] + text + [tokenizer.sep_token_id] + text_2 + [
+            tokenizer.sep_token_id
+        ]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

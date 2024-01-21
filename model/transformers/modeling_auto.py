@@ -18,56 +18,60 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import logging
 
-from .modeling_bert import BertModel, BertForMaskedLM, BertForSequenceClassification, BertForQuestionAnswering
-from .modeling_openai import OpenAIGPTModel, OpenAIGPTLMHeadModel
-from .modeling_gpt2 import GPT2Model, GPT2LMHeadModel
-from .modeling_ctrl import CTRLModel, CTRLLMHeadModel
-from .modeling_transfo_xl import TransfoXLModel, TransfoXLLMHeadModel
-from .modeling_xlnet import XLNetModel, XLNetLMHeadModel, XLNetForSequenceClassification, XLNetForQuestionAnswering
-from .modeling_xlm import XLMModel, XLMWithLMHeadModel, XLMForSequenceClassification, XLMForQuestionAnswering
-from .modeling_roberta import RobertaModel, RobertaForMaskedLM, RobertaForSequenceClassification
-from .modeling_distilbert import DistilBertModel, DistilBertForQuestionAnswering, DistilBertForMaskedLM, DistilBertForSequenceClassification
-from .modeling_camembert import CamembertModel, CamembertForMaskedLM, CamembertForSequenceClassification, CamembertForMultipleChoice
-
-from .modeling_utils import PreTrainedModel, SequenceSummary
-
-from .file_utils import add_start_docstrings
+from .modeling_bert import BertForMaskedLM, BertForQuestionAnswering, BertForSequenceClassification, BertModel
+from .modeling_camembert import CamembertForMaskedLM, CamembertForSequenceClassification, CamembertModel
+from .modeling_ctrl import CTRLLMHeadModel, CTRLModel
+from .modeling_distilbert import (
+    DistilBertForMaskedLM,
+    DistilBertForQuestionAnswering,
+    DistilBertForSequenceClassification,
+    DistilBertModel,
+)
+from .modeling_gpt2 import GPT2LMHeadModel, GPT2Model
+from .modeling_openai import OpenAIGPTLMHeadModel, OpenAIGPTModel
+from .modeling_roberta import RobertaForMaskedLM, RobertaForSequenceClassification, RobertaModel
+from .modeling_transfo_xl import TransfoXLLMHeadModel, TransfoXLModel
+from .modeling_xlm import XLMForQuestionAnswering, XLMForSequenceClassification, XLMModel, XLMWithLMHeadModel
+from .modeling_xlnet import XLNetForQuestionAnswering, XLNetForSequenceClassification, XLNetLMHeadModel, XLNetModel
 
 logger = logging.getLogger(__name__)
 
 
 class AutoModel(object):
     r"""
-        :class:`~transformers.AutoModel` is a generic model class
-        that will be instantiated as one of the base model classes of the library
-        when created with the `AutoModel.from_pretrained(pretrained_model_name_or_path)`
-        class method.
+    :class:`~transformers.AutoModel` is a generic model class
+    that will be instantiated as one of the base model classes of the library
+    when created with the `AutoModel.from_pretrained(pretrained_model_name_or_path)`
+    class method.
 
-        The `from_pretrained()` method takes care of returning the correct model class instance
-        using pattern matching on the `pretrained_model_name_or_path` string.
+    The `from_pretrained()` method takes care of returning the correct model class instance
+    using pattern matching on the `pretrained_model_name_or_path` string.
 
-        The base model class to instantiate is selected as the first pattern matching
-        in the `pretrained_model_name_or_path` string (in the following order):
-            - contains `distilbert`: DistilBertModel (DistilBERT model)
-            - contains `camembert`: CamembertModel (CamemBERT model)
-            - contains `roberta`: RobertaModel (RoBERTa model)
-            - contains `bert`: BertModel (Bert model)
-            - contains `openai-gpt`: OpenAIGPTModel (OpenAI GPT model)
-            - contains `gpt2`: GPT2Model (OpenAI GPT-2 model)
-            - contains `ctrl`: CTRLModel (Salesforce CTRL  model)
-            - contains `transfo-xl`: TransfoXLModel (Transformer-XL model)
-            - contains `xlnet`: XLNetModel (XLNet model)
-            - contains `xlm`: XLMModel (XLM model)
+    The base model class to instantiate is selected as the first pattern matching
+    in the `pretrained_model_name_or_path` string (in the following order):
+        - contains `distilbert`: DistilBertModel (DistilBERT model)
+        - contains `camembert`: CamembertModel (CamemBERT model)
+        - contains `roberta`: RobertaModel (RoBERTa model)
+        - contains `bert`: BertModel (Bert model)
+        - contains `openai-gpt`: OpenAIGPTModel (OpenAI GPT model)
+        - contains `gpt2`: GPT2Model (OpenAI GPT-2 model)
+        - contains `ctrl`: CTRLModel (Salesforce CTRL  model)
+        - contains `transfo-xl`: TransfoXLModel (Transformer-XL model)
+        - contains `xlnet`: XLNetModel (XLNet model)
+        - contains `xlm`: XLMModel (XLM model)
 
-        This class cannot be instantiated using `__init__()` (throws an error).
+    This class cannot be instantiated using `__init__()` (throws an error).
     """
+
     def __init__(self):
-        raise EnvironmentError("AutoModel is designed to be instantiated "
-            "using the `AutoModel.from_pretrained(pretrained_model_name_or_path)` method.")
+        raise EnvironmentError(
+            "AutoModel is designed to be instantiated "
+            "using the `AutoModel.from_pretrained(pretrained_model_name_or_path)` method."
+        )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
-        r""" Instantiates one of the base model classes of the library
+        r"""Instantiates one of the base model classes of the library
         from a pre-trained model configuration.
 
         The model class to instantiate is selected as the first pattern matching
@@ -139,63 +143,68 @@ class AutoModel(object):
             model = AutoModel.from_pretrained('./tf_model/bert_tf_checkpoint.ckpt.index', from_tf=True, config=config)
 
         """
-        if 'distilbert' in pretrained_model_name_or_path:
+        if "distilbert" in pretrained_model_name_or_path:
             return DistilBertModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'camembert' in pretrained_model_name_or_path:
+        elif "camembert" in pretrained_model_name_or_path:
             return CamembertModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'roberta' in pretrained_model_name_or_path:
+        elif "roberta" in pretrained_model_name_or_path:
             return RobertaModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'bert' in pretrained_model_name_or_path:
+        elif "bert" in pretrained_model_name_or_path:
             return BertModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'openai-gpt' in pretrained_model_name_or_path:
+        elif "openai-gpt" in pretrained_model_name_or_path:
             return OpenAIGPTModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'gpt2' in pretrained_model_name_or_path:
+        elif "gpt2" in pretrained_model_name_or_path:
             return GPT2Model.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'transfo-xl' in pretrained_model_name_or_path:
+        elif "transfo-xl" in pretrained_model_name_or_path:
             return TransfoXLModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlnet' in pretrained_model_name_or_path:
+        elif "xlnet" in pretrained_model_name_or_path:
             return XLNetModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlm' in pretrained_model_name_or_path:
+        elif "xlm" in pretrained_model_name_or_path:
             return XLMModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'ctrl' in pretrained_model_name_or_path:
+        elif "ctrl" in pretrained_model_name_or_path:
             return CTRLModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        raise ValueError("Unrecognized model identifier in {}. Should contains one of "
-                         "'bert', 'openai-gpt', 'gpt2', 'transfo-xl', 'xlnet', "
-                         "'xlm', 'roberta, 'ctrl'".format(pretrained_model_name_or_path))
+        raise ValueError(
+            "Unrecognized model identifier in {}. Should contains one of "
+            "'bert', 'openai-gpt', 'gpt2', 'transfo-xl', 'xlnet', "
+            "'xlm', 'roberta, 'ctrl'".format(pretrained_model_name_or_path)
+        )
 
 
 class AutoModelWithLMHead(object):
     r"""
-        :class:`~transformers.AutoModelWithLMHead` is a generic model class
-        that will be instantiated as one of the language modeling model classes of the library
-        when created with the `AutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)`
-        class method.
+    :class:`~transformers.AutoModelWithLMHead` is a generic model class
+    that will be instantiated as one of the language modeling model classes of the library
+    when created with the `AutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)`
+    class method.
 
-        The `from_pretrained()` method takes care of returning the correct model class instance
-        using pattern matching on the `pretrained_model_name_or_path` string.
+    The `from_pretrained()` method takes care of returning the correct model class instance
+    using pattern matching on the `pretrained_model_name_or_path` string.
 
-        The model class to instantiate is selected as the first pattern matching
-        in the `pretrained_model_name_or_path` string (in the following order):
-            - contains `distilbert`: DistilBertForMaskedLM (DistilBERT model)
-            - contains `camembert`: CamembertForMaskedLM (CamemBERT model)
-            - contains `roberta`: RobertaForMaskedLM (RoBERTa model)
-            - contains `bert`: BertForMaskedLM (Bert model)
-            - contains `openai-gpt`: OpenAIGPTLMHeadModel (OpenAI GPT model)
-            - contains `gpt2`: GPT2LMHeadModel (OpenAI GPT-2 model)
-            - contains `ctrl`: CTRLLMModel (Salesforce CTRL model)
-            - contains `transfo-xl`: TransfoXLLMHeadModel (Transformer-XL model)
-            - contains `xlnet`: XLNetLMHeadModel (XLNet model)
-            - contains `xlm`: XLMWithLMHeadModel (XLM model)
+    The model class to instantiate is selected as the first pattern matching
+    in the `pretrained_model_name_or_path` string (in the following order):
+        - contains `distilbert`: DistilBertForMaskedLM (DistilBERT model)
+        - contains `camembert`: CamembertForMaskedLM (CamemBERT model)
+        - contains `roberta`: RobertaForMaskedLM (RoBERTa model)
+        - contains `bert`: BertForMaskedLM (Bert model)
+        - contains `openai-gpt`: OpenAIGPTLMHeadModel (OpenAI GPT model)
+        - contains `gpt2`: GPT2LMHeadModel (OpenAI GPT-2 model)
+        - contains `ctrl`: CTRLLMModel (Salesforce CTRL model)
+        - contains `transfo-xl`: TransfoXLLMHeadModel (Transformer-XL model)
+        - contains `xlnet`: XLNetLMHeadModel (XLNet model)
+        - contains `xlm`: XLMWithLMHeadModel (XLM model)
 
-        This class cannot be instantiated using `__init__()` (throws an error).
+    This class cannot be instantiated using `__init__()` (throws an error).
     """
+
     def __init__(self):
-        raise EnvironmentError("AutoModelWithLMHead is designed to be instantiated "
-            "using the `AutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)` method.")
+        raise EnvironmentError(
+            "AutoModelWithLMHead is designed to be instantiated "
+            "using the `AutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)` method."
+        )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
-        r""" Instantiates one of the language modeling model classes of the library
+        r"""Instantiates one of the language modeling model classes of the library
         from a pre-trained model configuration.
 
         The `from_pretrained()` method takes care of returning the correct model class instance
@@ -269,59 +278,64 @@ class AutoModelWithLMHead(object):
             model = AutoModelWithLMHead.from_pretrained('./tf_model/bert_tf_checkpoint.ckpt.index', from_tf=True, config=config)
 
         """
-        if 'distilbert' in pretrained_model_name_or_path:
+        if "distilbert" in pretrained_model_name_or_path:
             return DistilBertForMaskedLM.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'camembert' in pretrained_model_name_or_path:
+        elif "camembert" in pretrained_model_name_or_path:
             return CamembertForMaskedLM.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'roberta' in pretrained_model_name_or_path:
+        elif "roberta" in pretrained_model_name_or_path:
             return RobertaForMaskedLM.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'bert' in pretrained_model_name_or_path:
+        elif "bert" in pretrained_model_name_or_path:
             return BertForMaskedLM.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'openai-gpt' in pretrained_model_name_or_path:
+        elif "openai-gpt" in pretrained_model_name_or_path:
             return OpenAIGPTLMHeadModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'gpt2' in pretrained_model_name_or_path:
+        elif "gpt2" in pretrained_model_name_or_path:
             return GPT2LMHeadModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'transfo-xl' in pretrained_model_name_or_path:
+        elif "transfo-xl" in pretrained_model_name_or_path:
             return TransfoXLLMHeadModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlnet' in pretrained_model_name_or_path:
+        elif "xlnet" in pretrained_model_name_or_path:
             return XLNetLMHeadModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlm' in pretrained_model_name_or_path:
+        elif "xlm" in pretrained_model_name_or_path:
             return XLMWithLMHeadModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'ctrl' in pretrained_model_name_or_path:
+        elif "ctrl" in pretrained_model_name_or_path:
             return CTRLLMHeadModel.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        raise ValueError("Unrecognized model identifier in {}. Should contains one of "
-                         "'bert', 'openai-gpt', 'gpt2', 'transfo-xl', 'xlnet', "
-                         "'xlm', 'roberta','ctrl'".format(pretrained_model_name_or_path))
+        raise ValueError(
+            "Unrecognized model identifier in {}. Should contains one of "
+            "'bert', 'openai-gpt', 'gpt2', 'transfo-xl', 'xlnet', "
+            "'xlm', 'roberta','ctrl'".format(pretrained_model_name_or_path)
+        )
 
 
 class AutoModelForSequenceClassification(object):
     r"""
-        :class:`~transformers.AutoModelForSequenceClassification` is a generic model class
-        that will be instantiated as one of the sequence classification model classes of the library
-        when created with the `AutoModelForSequenceClassification.from_pretrained(pretrained_model_name_or_path)`
-        class method.
+    :class:`~transformers.AutoModelForSequenceClassification` is a generic model class
+    that will be instantiated as one of the sequence classification model classes of the library
+    when created with the `AutoModelForSequenceClassification.from_pretrained(pretrained_model_name_or_path)`
+    class method.
 
-        The `from_pretrained()` method takes care of returning the correct model class instance
-        using pattern matching on the `pretrained_model_name_or_path` string.
+    The `from_pretrained()` method takes care of returning the correct model class instance
+    using pattern matching on the `pretrained_model_name_or_path` string.
 
-        The model class to instantiate is selected as the first pattern matching
-        in the `pretrained_model_name_or_path` string (in the following order):
-            - contains `distilbert`: DistilBertForSequenceClassification (DistilBERT model)
-            - contains `camembert`: CamembertForSequenceClassification (CamemBERT model)
-            - contains `roberta`: RobertaForSequenceClassification (RoBERTa model)
-            - contains `bert`: BertForSequenceClassification (Bert model)
-            - contains `xlnet`: XLNetForSequenceClassification (XLNet model)
-            - contains `xlm`: XLMForSequenceClassification (XLM model)
+    The model class to instantiate is selected as the first pattern matching
+    in the `pretrained_model_name_or_path` string (in the following order):
+        - contains `distilbert`: DistilBertForSequenceClassification (DistilBERT model)
+        - contains `camembert`: CamembertForSequenceClassification (CamemBERT model)
+        - contains `roberta`: RobertaForSequenceClassification (RoBERTa model)
+        - contains `bert`: BertForSequenceClassification (Bert model)
+        - contains `xlnet`: XLNetForSequenceClassification (XLNet model)
+        - contains `xlm`: XLMForSequenceClassification (XLM model)
 
-        This class cannot be instantiated using `__init__()` (throws an error).
+    This class cannot be instantiated using `__init__()` (throws an error).
     """
+
     def __init__(self):
-        raise EnvironmentError("AutoModelWithLMHead is designed to be instantiated "
-            "using the `AutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)` method.")
+        raise EnvironmentError(
+            "AutoModelWithLMHead is designed to be instantiated "
+            "using the `AutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)` method."
+        )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
-        r""" Instantiates one of the sequence classification model classes of the library
+        r"""Instantiates one of the sequence classification model classes of the library
         from a pre-trained model configuration.
 
         The `from_pretrained()` method takes care of returning the correct model class instance
@@ -392,49 +406,60 @@ class AutoModelForSequenceClassification(object):
             model = AutoModelForSequenceClassification.from_pretrained('./tf_model/bert_tf_checkpoint.ckpt.index', from_tf=True, config=config)
 
         """
-        if 'distilbert' in pretrained_model_name_or_path:
-            return DistilBertForSequenceClassification.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'camembert' in pretrained_model_name_or_path:
-            return CamembertForSequenceClassification.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'roberta' in pretrained_model_name_or_path:
-            return RobertaForSequenceClassification.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'bert' in pretrained_model_name_or_path:
+        if "distilbert" in pretrained_model_name_or_path:
+            return DistilBertForSequenceClassification.from_pretrained(
+                pretrained_model_name_or_path, *model_args, **kwargs
+            )
+        elif "camembert" in pretrained_model_name_or_path:
+            return CamembertForSequenceClassification.from_pretrained(
+                pretrained_model_name_or_path, *model_args, **kwargs
+            )
+        elif "roberta" in pretrained_model_name_or_path:
+            return RobertaForSequenceClassification.from_pretrained(
+                pretrained_model_name_or_path, *model_args, **kwargs
+            )
+        elif "bert" in pretrained_model_name_or_path:
             return BertForSequenceClassification.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlnet' in pretrained_model_name_or_path:
+        elif "xlnet" in pretrained_model_name_or_path:
             return XLNetForSequenceClassification.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlm' in pretrained_model_name_or_path:
+        elif "xlm" in pretrained_model_name_or_path:
             return XLMForSequenceClassification.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
 
-        raise ValueError("Unrecognized model identifier in {}. Should contains one of "
-                         "'bert', 'xlnet', 'xlm', 'roberta'".format(pretrained_model_name_or_path))
+        raise ValueError(
+            "Unrecognized model identifier in {}. Should contains one of "
+            "'bert', 'xlnet', 'xlm', 'roberta'".format(pretrained_model_name_or_path)
+        )
 
 
 class AutoModelForQuestionAnswering(object):
     r"""
-        :class:`~transformers.AutoModelForQuestionAnswering` is a generic model class
-        that will be instantiated as one of the question answering model classes of the library
-        when created with the `AutoModelForQuestionAnswering.from_pretrained(pretrained_model_name_or_path)`
-        class method.
+    :class:`~transformers.AutoModelForQuestionAnswering` is a generic model class
+    that will be instantiated as one of the question answering model classes of the library
+    when created with the `AutoModelForQuestionAnswering.from_pretrained(pretrained_model_name_or_path)`
+    class method.
 
-        The `from_pretrained()` method takes care of returning the correct model class instance
-        using pattern matching on the `pretrained_model_name_or_path` string.
+    The `from_pretrained()` method takes care of returning the correct model class instance
+    using pattern matching on the `pretrained_model_name_or_path` string.
 
-        The model class to instantiate is selected as the first pattern matching
-        in the `pretrained_model_name_or_path` string (in the following order):
-            - contains `distilbert`: DistilBertForQuestionAnswering (DistilBERT model)
-            - contains `bert`: BertForQuestionAnswering (Bert model)
-            - contains `xlnet`: XLNetForQuestionAnswering (XLNet model)
-            - contains `xlm`: XLMForQuestionAnswering (XLM model)
+    The model class to instantiate is selected as the first pattern matching
+    in the `pretrained_model_name_or_path` string (in the following order):
+        - contains `distilbert`: DistilBertForQuestionAnswering (DistilBERT model)
+        - contains `bert`: BertForQuestionAnswering (Bert model)
+        - contains `xlnet`: XLNetForQuestionAnswering (XLNet model)
+        - contains `xlm`: XLMForQuestionAnswering (XLM model)
 
-        This class cannot be instantiated using `__init__()` (throws an error).
+    This class cannot be instantiated using `__init__()` (throws an error).
     """
+
     def __init__(self):
-        raise EnvironmentError("AutoModelWithLMHead is designed to be instantiated "
-            "using the `AutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)` method.")
+        raise EnvironmentError(
+            "AutoModelWithLMHead is designed to be instantiated "
+            "using the `AutoModelWithLMHead.from_pretrained(pretrained_model_name_or_path)` method."
+        )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
-        r""" Instantiates one of the question answering model classes of the library
+        r"""Instantiates one of the question answering model classes of the library
         from a pre-trained model configuration.
 
         The `from_pretrained()` method takes care of returning the correct model class instance
@@ -503,14 +528,16 @@ class AutoModelForQuestionAnswering(object):
             model = AutoModelForQuestionAnswering.from_pretrained('./tf_model/bert_tf_checkpoint.ckpt.index', from_tf=True, config=config)
 
         """
-        if 'distilbert' in pretrained_model_name_or_path:
+        if "distilbert" in pretrained_model_name_or_path:
             return DistilBertForQuestionAnswering.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'bert' in pretrained_model_name_or_path:
+        elif "bert" in pretrained_model_name_or_path:
             return BertForQuestionAnswering.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlnet' in pretrained_model_name_or_path:
+        elif "xlnet" in pretrained_model_name_or_path:
             return XLNetForQuestionAnswering.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        elif 'xlm' in pretrained_model_name_or_path:
+        elif "xlm" in pretrained_model_name_or_path:
             return XLMForQuestionAnswering.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
 
-        raise ValueError("Unrecognized model identifier in {}. Should contains one of "
-                         "'bert', 'xlnet', 'xlm'".format(pretrained_model_name_or_path))
+        raise ValueError(
+            "Unrecognized model identifier in {}. Should contains one of "
+            "'bert', 'xlnet', 'xlm'".format(pretrained_model_name_or_path)
+        )

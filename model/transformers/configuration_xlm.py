@@ -25,16 +25,16 @@ from .configuration_utils import PretrainedConfig
 logger = logging.getLogger(__name__)
 
 XLM_PRETRAINED_CONFIG_ARCHIVE_MAP = {
-    'xlm-mlm-en-2048': "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-en-2048-config.json",
-    'xlm-mlm-ende-1024': "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-ende-1024-config.json",
-    'xlm-mlm-enfr-1024': "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-enfr-1024-config.json",
-    'xlm-mlm-enro-1024': "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-enro-1024-config.json",
-    'xlm-mlm-tlm-xnli15-1024': "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-tlm-xnli15-1024-config.json",
-    'xlm-mlm-xnli15-1024': "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-xnli15-1024-config.json",
-    'xlm-clm-enfr-1024': "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-clm-enfr-1024-config.json",
-    'xlm-clm-ende-1024': "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-clm-ende-1024-config.json",
-    'xlm-mlm-17-1280': "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-17-1280-config.json",
-    'xlm-mlm-100-1280': "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-100-1280-config.json",
+    "xlm-mlm-en-2048": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-en-2048-config.json",
+    "xlm-mlm-ende-1024": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-ende-1024-config.json",
+    "xlm-mlm-enfr-1024": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-enfr-1024-config.json",
+    "xlm-mlm-enro-1024": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-enro-1024-config.json",
+    "xlm-mlm-tlm-xnli15-1024": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-tlm-xnli15-1024-config.json",
+    "xlm-mlm-xnli15-1024": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-xnli15-1024-config.json",
+    "xlm-clm-enfr-1024": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-clm-enfr-1024-config.json",
+    "xlm-clm-ende-1024": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-clm-ende-1024-config.json",
+    "xlm-mlm-17-1280": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-17-1280-config.json",
+    "xlm-mlm-100-1280": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-100-1280-config.json",
 }
 
 
@@ -78,49 +78,51 @@ class XLMConfig(PretrainedConfig):
             -1 means no clamping.
         same_length: bool, whether to use the same attention length for each token.
     """
+
     pretrained_config_archive_map = XLM_PRETRAINED_CONFIG_ARCHIVE_MAP
 
-    def __init__(self,
-                 vocab_size_or_config_json_file=30145,
-                 emb_dim=2048,
-                 n_layers=12,
-                 n_heads=16,
-                 dropout=0.1,
-                 attention_dropout=0.1,
-                 gelu_activation=True,
-                 sinusoidal_embeddings=False,
-                 causal=False,
-                 asm=False,
-                 n_langs=1,
-                 use_lang_emb=True,
-                 max_position_embeddings=512,
-                 embed_init_std=2048 ** -0.5,
-                 layer_norm_eps=1e-12,
-                 init_std=0.02,
-                 bos_index=0,
-                 eos_index=1,
-                 pad_index=2,
-                 unk_index=3,
-                 mask_index=5,
-                 is_encoder=True,
-
-                 finetuning_task=None,
-                 num_labels=2,
-                 summary_type='first',
-                 summary_use_proj=True,
-                 summary_activation=None,
-                 summary_proj_to_labels=True,
-                 summary_first_dropout=0.1,
-                 start_n_top=5,
-                 end_n_top=5,
-                 **kwargs):
-        """Constructs XLMConfig.
-        """
+    def __init__(
+        self,
+        vocab_size_or_config_json_file=30145,
+        emb_dim=2048,
+        n_layers=12,
+        n_heads=16,
+        dropout=0.1,
+        attention_dropout=0.1,
+        gelu_activation=True,
+        sinusoidal_embeddings=False,
+        causal=False,
+        asm=False,
+        n_langs=1,
+        use_lang_emb=True,
+        max_position_embeddings=512,
+        embed_init_std=2048**-0.5,
+        layer_norm_eps=1e-12,
+        init_std=0.02,
+        bos_index=0,
+        eos_index=1,
+        pad_index=2,
+        unk_index=3,
+        mask_index=5,
+        is_encoder=True,
+        finetuning_task=None,
+        num_labels=2,
+        summary_type="first",
+        summary_use_proj=True,
+        summary_activation=None,
+        summary_proj_to_labels=True,
+        summary_first_dropout=0.1,
+        start_n_top=5,
+        end_n_top=5,
+        **kwargs,
+    ):
+        """Constructs XLMConfig."""
         super(XLMConfig, self).__init__(**kwargs)
 
-        if isinstance(vocab_size_or_config_json_file, str) or (sys.version_info[0] == 2
-                        and isinstance(vocab_size_or_config_json_file, unicode)):
-            with open(vocab_size_or_config_json_file, "r", encoding='utf-8') as reader:
+        if isinstance(vocab_size_or_config_json_file, str) or (
+            sys.version_info[0] == 2 and isinstance(vocab_size_or_config_json_file, unicode)
+        ):
+            with open(vocab_size_or_config_json_file, "r", encoding="utf-8") as reader:
                 json_config = json.loads(reader.read())
             for key, value in json_config.items():
                 self.__dict__[key] = value
@@ -157,8 +159,10 @@ class XLMConfig(PretrainedConfig):
             self.start_n_top = start_n_top
             self.end_n_top = end_n_top
         else:
-            raise ValueError("First argument must be either a vocabulary size (int)"
-                             " or the path to a pretrained model config file (str)")
+            raise ValueError(
+                "First argument must be either a vocabulary size (int)"
+                " or the path to a pretrained model config file (str)"
+            )
 
     @property
     def vocab_size(self):

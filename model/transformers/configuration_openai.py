@@ -30,6 +30,7 @@ OPENAI_GPT_PRETRAINED_CONFIG_ARCHIVE_MAP = {
     "openai-gpt": "https://s3.amazonaws.com/models.huggingface.co/bert/openai-gpt-config.json"
 }
 
+
 class OpenAIGPTConfig(PretrainedConfig):
     """
     Configuration class to store the configuration of a `OpenAIGPTModel`.
@@ -54,6 +55,7 @@ class OpenAIGPTConfig(PretrainedConfig):
             initializing all weight matrices.
         predict_special_tokens: should we predict special tokens (when the model has a LM head)
     """
+
     pretrained_config_archive_map = OPENAI_GPT_PRETRAINED_CONFIG_ARCHIVE_MAP
 
     def __init__(
@@ -71,21 +73,20 @@ class OpenAIGPTConfig(PretrainedConfig):
         layer_norm_epsilon=1e-5,
         initializer_range=0.02,
         predict_special_tokens=True,
-
         num_labels=1,
-        summary_type='cls_index',
+        summary_type="cls_index",
         summary_use_proj=True,
         summary_activation=None,
         summary_proj_to_labels=True,
         summary_first_dropout=0.1,
-        **kwargs
+        **kwargs,
     ):
-        """Constructs OpenAIGPTConfig.
-        """
+        """Constructs OpenAIGPTConfig."""
         super(OpenAIGPTConfig, self).__init__(**kwargs)
 
-        if isinstance(vocab_size_or_config_json_file, str) or (sys.version_info[0] == 2
-                        and isinstance(vocab_size_or_config_json_file, unicode)):
+        if isinstance(vocab_size_or_config_json_file, str) or (
+            sys.version_info[0] == 2 and isinstance(vocab_size_or_config_json_file, unicode)
+        ):
             with open(vocab_size_or_config_json_file, "r", encoding="utf-8") as reader:
                 json_config = json.loads(reader.read())
             for key, value in json_config.items():

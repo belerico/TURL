@@ -15,23 +15,18 @@
 # limitations under the License.
 """PyTorch BERT model."""
 
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
-import copy
-import json
 import logging
 import os
-from io import open
 
-import six
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
 from torch.nn import functional as F
 
 from .configuration_utils import PretrainedConfig
-from .file_utils import cached_path, WEIGHTS_NAME, TF_WEIGHTS_NAME, TF2_WEIGHTS_NAME
+from .file_utils import TF2_WEIGHTS_NAME, TF_WEIGHTS_NAME, WEIGHTS_NAME, cached_path
 
 logger = logging.getLogger(__name__)
 
@@ -41,30 +36,31 @@ try:
 except ImportError:
     # Older PyTorch compatibility
     class Identity(nn.Module):
-        r"""A placeholder identity operator that is argument-insensitive.
-        """
+        r"""A placeholder identity operator that is argument-insensitive."""
+
         def __init__(self, *args, **kwargs):
             super(Identity, self).__init__()
 
         def forward(self, input):
             return input
 
+
 class PreTrainedModel(nn.Module):
-    r""" Base class for all models.
+    r"""Base class for all models.
 
-        :class:`~transformers.PreTrainedModel` takes care of storing the configuration of the models and handles methods for loading/downloading/saving models
-        as well as a few methods common to all models to (i) resize the input embeddings and (ii) prune heads in the self-attention heads.
+    :class:`~transformers.PreTrainedModel` takes care of storing the configuration of the models and handles methods for loading/downloading/saving models
+    as well as a few methods common to all models to (i) resize the input embeddings and (ii) prune heads in the self-attention heads.
 
-        Class attributes (overridden by derived classes):
-            - ``config_class``: a class derived from :class:`~transformers.PretrainedConfig` to use as configuration class for this model architecture.
-            - ``pretrained_model_archive_map``: a python ``dict`` of with `short-cut-names` (string) as keys and `url` (string) of associated pretrained weights as values.
-            - ``load_tf_weights``: a python ``method`` for loading a TensorFlow checkpoint in a PyTorch model, taking as arguments:
+    Class attributes (overridden by derived classes):
+        - ``config_class``: a class derived from :class:`~transformers.PretrainedConfig` to use as configuration class for this model architecture.
+        - ``pretrained_model_archive_map``: a python ``dict`` of with `short-cut-names` (string) as keys and `url` (string) of associated pretrained weights as values.
+        - ``load_tf_weights``: a python ``method`` for loading a TensorFlow checkpoint in a PyTorch model, taking as arguments:
 
-                - ``model``: an instance of the relevant subclass of :class:`~transformers.PreTrainedModel`,
-                - ``config``: an instance of the relevant subclass of :class:`~transformers.PretrainedConfig`,
-                - ``path``: a path (string) to the TensorFlow checkpoint.
+            - ``model``: an instance of the relevant subclass of :class:`~transformers.PreTrainedModel`,
+            - ``config``: an instance of the relevant subclass of :class:`~transformers.PretrainedConfig`,
+            - ``path``: a path (string) to the TensorFlow checkpoint.
 
-            - ``base_model_prefix``: a string indicating the attribute associated to the base model in derived classes of the same architecture adding modules on top of the base model.
+        - ``base_model_prefix``: a string indicating the attribute associated to the base model in derived classes of the same architecture adding modules on top of the base model.
     """
     config_class = None
     pretrained_model_archive_map = {}
@@ -79,7 +75,8 @@ class PreTrainedModel(nn.Module):
                 "To create a model from a pretrained model use "
                 "`model = {}.from_pretrained(PRETRAINED_MODEL_NAME)`".format(
                     self.__class__.__name__, self.__class__.__name__
-                ))
+                )
+            )
         # Save config in model
         self.config = config
 
@@ -88,8 +85,7 @@ class PreTrainedModel(nn.Module):
         return getattr(self, self.base_model_prefix, self)
 
     def get_input_embeddings(self):
-        """ Get model's input embeddings
-        """
+        """Get model's input embeddings"""
         base_model = getattr(self, self.base_model_prefix, self)
         if base_model is not self:
             return base_model.get_input_embeddings()
@@ -97,8 +93,7 @@ class PreTrainedModel(nn.Module):
             raise NotImplementedError
 
     def set_input_embeddings(self, value):
-        """ Set model's input embeddings
-        """
+        """Set model's input embeddings"""
         base_model = getattr(self, self.base_model_prefix, self)
         if base_model is not self:
             base_model.set_input_embeddings(value)
@@ -106,39 +101,38 @@ class PreTrainedModel(nn.Module):
             raise NotImplementedError
 
     def get_output_embeddings(self):
-        """ Get model's output embeddings
-            Return None if the model doesn't have output embeddings
+        """Get model's output embeddings
+        Return None if the model doesn't have output embeddings
         """
         return None  # Overwrite for models with output embeddings
 
     def tie_weights(self):
-        """ Make sure we are sharing the input and output embeddings.
-            Export to TorchScript can't handle parameter sharing so we are cloning them instead.
+        """Make sure we are sharing the input and output embeddings.
+        Export to TorchScript can't handle parameter sharing so we are cloning them instead.
         """
         output_embeddings = self.get_output_embeddings()
         if output_embeddings is not None:
             self._tie_or_clone_weights(output_embeddings, self.get_input_embeddings())
 
     def _tie_or_clone_weights(self, output_embeddings, input_embeddings):
-        """ Tie or clone module weights depending of weither we are using TorchScript or not
-        """
+        """Tie or clone module weights depending of weither we are using TorchScript or not"""
         if self.config.torchscript:
             output_embeddings.weight = nn.Parameter(input_embeddings.weight.clone())
         else:
             output_embeddings.weight = input_embeddings.weight
 
-        if hasattr(output_embeddings, 'bias') and output_embeddings.bias is not None:
+        if hasattr(output_embeddings, "bias") and output_embeddings.bias is not None:
             output_embeddings.bias.data = torch.nn.functional.pad(
                 output_embeddings.bias.data,
                 (0, output_embeddings.weight.shape[0] - output_embeddings.bias.shape[0]),
-                'constant',
-                0
+                "constant",
+                0,
             )
-        if hasattr(output_embeddings, 'out_features') and hasattr(input_embeddings, 'num_embeddings'):
+        if hasattr(output_embeddings, "out_features") and hasattr(input_embeddings, "num_embeddings"):
             output_embeddings.out_features = input_embeddings.num_embeddings
 
     def resize_token_embeddings(self, new_num_tokens=None):
-        """ Resize input token embeddings matrix of the model if new_num_tokens != config.vocab_size.
+        """Resize input token embeddings matrix of the model if new_num_tokens != config.vocab_size.
         Take care of tying weights embeddings afterwards if the model class has a `tie_weights()` method.
 
         Arguments:
@@ -160,7 +154,7 @@ class PreTrainedModel(nn.Module):
         base_model.vocab_size = new_num_tokens
 
         # Tie weights again if needed
-        if hasattr(self, 'tie_weights'):
+        if hasattr(self, "tie_weights"):
             self.tie_weights()
 
         return model_embeds
@@ -172,7 +166,7 @@ class PreTrainedModel(nn.Module):
         return self.get_input_embeddings()
 
     def _get_resized_embeddings(self, old_embeddings, new_num_tokens=None):
-        """ Build a resized Embedding Module from a provided token Embedding Module.
+        """Build a resized Embedding Module from a provided token Embedding Module.
             Increasing the size will add newly initialized vectors at the end
             Reducing the size will remove vectors from the end
 
@@ -206,7 +200,7 @@ class PreTrainedModel(nn.Module):
         return new_embeddings
 
     def init_weights(self):
-        """ Initialize and prunes weights if needed. """
+        """Initialize and prunes weights if needed."""
         # Initialize weights
         self.apply(self._init_weights)
 
@@ -218,12 +212,12 @@ class PreTrainedModel(nn.Module):
         self.tie_weights()
 
     def prune_heads(self, heads_to_prune):
-        """ Prunes heads of the base model.
+        """Prunes heads of the base model.
 
-            Arguments:
+        Arguments:
 
-                heads_to_prune: dict with keys being selected layer indices (`int`) and associated values being the list of heads to prune in said layer (list of `int`).
-                E.g. {1: [0, 2], 2: [2, 3]} will prune heads 0 and 2 on layer 1 and heads 2 and 3 on layer 2.
+            heads_to_prune: dict with keys being selected layer indices (`int`) and associated values being the list of heads to prune in said layer (list of `int`).
+            E.g. {1: [0, 2], 2: [2, 3]} will prune heads 0 and 2 on layer 1 and heads 2 and 3 on layer 2.
         """
         # save new sets of pruned heads as union of previously stored pruned heads and newly pruned heads
         for layer, heads in heads_to_prune.items():
@@ -233,13 +227,15 @@ class PreTrainedModel(nn.Module):
         self.base_model._prune_heads(heads_to_prune)
 
     def save_pretrained(self, save_directory):
-        """ Save a model and its configuration file to a directory, so that it
-            can be re-loaded using the `:func:`~transformers.PreTrainedModel.from_pretrained`` class method.
+        """Save a model and its configuration file to a directory, so that it
+        can be re-loaded using the `:func:`~transformers.PreTrainedModel.from_pretrained`` class method.
         """
-        assert os.path.isdir(save_directory), "Saving path should be a directory where the model and configuration can be saved"
+        assert os.path.isdir(
+            save_directory
+        ), "Saving path should be a directory where the model and configuration can be saved"
 
         # Only save the model itself if we are using distributed training
-        model_to_save = self.module if hasattr(self, 'module') else self
+        model_to_save = self.module if hasattr(self, "module") else self
 
         # Save configuration file
         model_to_save.config.save_pretrained(save_directory)
@@ -315,22 +311,24 @@ class PreTrainedModel(nn.Module):
             model = BertModel.from_pretrained('./tf_model/my_tf_checkpoint.ckpt.index', from_tf=True, config=config)
 
         """
-        config = kwargs.pop('config', None)
-        state_dict = kwargs.pop('state_dict', None)
-        cache_dir = kwargs.pop('cache_dir', None)
-        from_tf = kwargs.pop('from_tf', False)
-        force_download = kwargs.pop('force_download', False)
-        proxies = kwargs.pop('proxies', None)
-        output_loading_info = kwargs.pop('output_loading_info', False)
+        config = kwargs.pop("config", None)
+        state_dict = kwargs.pop("state_dict", None)
+        cache_dir = kwargs.pop("cache_dir", None)
+        from_tf = kwargs.pop("from_tf", False)
+        force_download = kwargs.pop("force_download", False)
+        proxies = kwargs.pop("proxies", None)
+        output_loading_info = kwargs.pop("output_loading_info", False)
 
         # Load config
         if config is None:
             config, model_kwargs = cls.config_class.from_pretrained(
-                pretrained_model_name_or_path, *model_args,
-                cache_dir=cache_dir, return_unused_kwargs=True,
+                pretrained_model_name_or_path,
+                *model_args,
+                cache_dir=cache_dir,
+                return_unused_kwargs=True,
                 force_download=force_download,
                 proxies=proxies,
-                **kwargs
+                **kwargs,
             )
         else:
             model_kwargs = kwargs
@@ -350,37 +348,44 @@ class PreTrainedModel(nn.Module):
                     # Load from a PyTorch checkpoint
                     archive_file = os.path.join(pretrained_model_name_or_path, WEIGHTS_NAME)
                 else:
-                    raise EnvironmentError("Error no file named {} found in directory {} or `from_tf` set to False".format(
-                        [WEIGHTS_NAME, TF2_WEIGHTS_NAME, TF_WEIGHTS_NAME + ".index"],
-                        pretrained_model_name_or_path))
+                    raise EnvironmentError(
+                        "Error no file named {} found in directory {} or `from_tf` set to False".format(
+                            [WEIGHTS_NAME, TF2_WEIGHTS_NAME, TF_WEIGHTS_NAME + ".index"], pretrained_model_name_or_path
+                        )
+                    )
             elif os.path.isfile(pretrained_model_name_or_path):
                 archive_file = pretrained_model_name_or_path
             else:
-                assert from_tf, "Error finding file {}, no file or TF 1.X checkpoint found".format(pretrained_model_name_or_path)
+                assert from_tf, "Error finding file {}, no file or TF 1.X checkpoint found".format(
+                    pretrained_model_name_or_path
+                )
                 archive_file = pretrained_model_name_or_path + ".index"
 
             # redirect to the cache, if necessary
             try:
-                resolved_archive_file = cached_path(archive_file, cache_dir=cache_dir, force_download=force_download, proxies=proxies)
+                resolved_archive_file = cached_path(
+                    archive_file, cache_dir=cache_dir, force_download=force_download, proxies=proxies
+                )
             except EnvironmentError:
                 if pretrained_model_name_or_path in cls.pretrained_model_archive_map:
-                    msg = "Couldn't reach server at '{}' to download pretrained weights.".format(
-                            archive_file)
+                    msg = "Couldn't reach server at '{}' to download pretrained weights.".format(archive_file)
                 else:
-                    msg = "Model name '{}' was not found in model name list ({}). " \
-                        "We assumed '{}' was a path or url to model weight files named one of {} but " \
+                    msg = (
+                        "Model name '{}' was not found in model name list ({}). "
+                        "We assumed '{}' was a path or url to model weight files named one of {} but "
                         "couldn't find any such file at this path or url.".format(
                             pretrained_model_name_or_path,
-                            ', '.join(cls.pretrained_model_archive_map.keys()),
+                            ", ".join(cls.pretrained_model_archive_map.keys()),
                             archive_file,
-                            [WEIGHTS_NAME, TF2_WEIGHTS_NAME, TF_WEIGHTS_NAME])
+                            [WEIGHTS_NAME, TF2_WEIGHTS_NAME, TF_WEIGHTS_NAME],
+                        )
+                    )
                 raise EnvironmentError(msg)
 
             if resolved_archive_file == archive_file:
                 logger.info("loading weights file {}".format(archive_file))
             else:
-                logger.info("loading weights file {} from cache at {}".format(
-                    archive_file, resolved_archive_file))
+                logger.info("loading weights file {} from cache at {}".format(archive_file, resolved_archive_file))
         else:
             resolved_archive_file = None
 
@@ -388,24 +393,27 @@ class PreTrainedModel(nn.Module):
         model = cls(config, *model_args, **model_kwargs)
 
         if state_dict is None and not from_tf:
-            state_dict = torch.load(resolved_archive_file, map_location='cpu')
+            state_dict = torch.load(resolved_archive_file, map_location="cpu")
 
         missing_keys = []
         unexpected_keys = []
         error_msgs = []
 
         if from_tf:
-            if resolved_archive_file.endswith('.index'):
+            if resolved_archive_file.endswith(".index"):
                 # Load from a TensorFlow 1.X checkpoint - provided by original authors
                 model = cls.load_tf_weights(model, config, resolved_archive_file[:-6])  # Remove the '.index'
             else:
                 # Load from our TensorFlow 2.0 checkpoints
                 try:
                     from transformers import load_tf2_checkpoint_in_pytorch_model
+
                     model = load_tf2_checkpoint_in_pytorch_model(model, resolved_archive_file, allow_missing_keys=True)
                 except ImportError as e:
-                    logger.error("Loading a TensorFlow model in PyTorch, requires both PyTorch and TensorFlow to be installed. Please see "
-                        "https://pytorch.org/ and https://www.tensorflow.org/install/ for installation instructions.")
+                    logger.error(
+                        "Loading a TensorFlow model in PyTorch, requires both PyTorch and TensorFlow to be installed. Please see "
+                        "https://pytorch.org/ and https://www.tensorflow.org/install/ for installation instructions."
+                    )
                     raise e
         else:
             # Convert old format to new format if needed from a PyTorch state_dict
@@ -413,10 +421,10 @@ class PreTrainedModel(nn.Module):
             new_keys = []
             for key in state_dict.keys():
                 new_key = None
-                if 'gamma' in key:
-                    new_key = key.replace('gamma', 'weight')
-                if 'beta' in key:
-                    new_key = key.replace('beta', 'bias')
+                if "gamma" in key:
+                    new_key = key.replace("gamma", "weight")
+                if "beta" in key:
+                    new_key = key.replace("beta", "bias")
                 if new_key:
                     old_keys.append(key)
                     new_keys.append(new_key)
@@ -424,41 +432,53 @@ class PreTrainedModel(nn.Module):
                 state_dict[new_key] = state_dict.pop(old_key)
 
             # copy state_dict so _load_from_state_dict can modify it
-            metadata = getattr(state_dict, '_metadata', None)
+            metadata = getattr(state_dict, "_metadata", None)
             state_dict = state_dict.copy()
             if metadata is not None:
                 state_dict._metadata = metadata
 
             # PyTorch's `_load_from_state_dict` does not copy parameters in a module's descendants
             # so we need to apply the function recursively.
-            def load(module, prefix=''):
+            def load(module, prefix=""):
                 local_metadata = {} if metadata is None else metadata.get(prefix[:-1], {})
                 module._load_from_state_dict(
-                    state_dict, prefix, local_metadata, True, missing_keys, unexpected_keys, error_msgs)
+                    state_dict, prefix, local_metadata, True, missing_keys, unexpected_keys, error_msgs
+                )
                 for name, child in module._modules.items():
                     if child is not None:
-                        load(child, prefix + name + '.')
+                        load(child, prefix + name + ".")
 
             # Make sure we are able to load base models as well as derived models (with heads)
-            start_prefix = ''
+            start_prefix = ""
             model_to_load = model
-            if not hasattr(model, cls.base_model_prefix) and any(s.startswith(cls.base_model_prefix) for s in state_dict.keys()):
-                start_prefix = cls.base_model_prefix + '.'
-            if hasattr(model, cls.base_model_prefix) and not any(s.startswith(cls.base_model_prefix) for s in state_dict.keys()):
+            if not hasattr(model, cls.base_model_prefix) and any(
+                s.startswith(cls.base_model_prefix) for s in state_dict.keys()
+            ):
+                start_prefix = cls.base_model_prefix + "."
+            if hasattr(model, cls.base_model_prefix) and not any(
+                s.startswith(cls.base_model_prefix) for s in state_dict.keys()
+            ):
                 model_to_load = getattr(model, cls.base_model_prefix)
 
             load(model_to_load, prefix=start_prefix)
             if len(missing_keys) > 0:
-                logger.info("Weights of {} not initialized from pretrained model: {}".format(
-                    model.__class__.__name__, missing_keys))
+                logger.info(
+                    "Weights of {} not initialized from pretrained model: {}".format(
+                        model.__class__.__name__, missing_keys
+                    )
+                )
             if len(unexpected_keys) > 0:
-                logger.info("Weights from pretrained model not used in {}: {}".format(
-                    model.__class__.__name__, unexpected_keys))
+                logger.info(
+                    "Weights from pretrained model not used in {}: {}".format(model.__class__.__name__, unexpected_keys)
+                )
             if len(error_msgs) > 0:
-                raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
-                                model.__class__.__name__, "\n\t".join(error_msgs)))
+                raise RuntimeError(
+                    "Error(s) in loading state_dict for {}:\n\t{}".format(
+                        model.__class__.__name__, "\n\t".join(error_msgs)
+                    )
+                )
 
-        if hasattr(model, 'tie_weights'):
+        if hasattr(model, "tie_weights"):
             model.tie_weights()  # make sure word embedding weights are still tied
 
         # Set model in evaluation mode to desactivate DropOut modules by default
@@ -473,8 +493,8 @@ class PreTrainedModel(nn.Module):
 
 class Conv1D(nn.Module):
     def __init__(self, nf, nx):
-        """ Conv1D layer as defined by Radford et al. for OpenAI GPT (and also used in GPT-2)
-            Basically works like a Linear layer but the weights are transposed
+        """Conv1D layer as defined by Radford et al. for OpenAI GPT (and also used in GPT-2)
+        Basically works like a Linear layer but the weights are transposed
         """
         super(Conv1D, self).__init__()
         self.nf = nf
@@ -491,16 +511,17 @@ class Conv1D(nn.Module):
 
 
 class PoolerStartLogits(nn.Module):
-    """ Compute SQuAD start_logits from sequence hidden states. """
+    """Compute SQuAD start_logits from sequence hidden states."""
+
     def __init__(self, config):
         super(PoolerStartLogits, self).__init__()
         self.dense = nn.Linear(config.hidden_size, 1)
 
     def forward(self, hidden_states, p_mask=None):
-        """ Args:
-            **p_mask**: (`optional`) ``torch.FloatTensor`` of shape `(batch_size, seq_len)`
-                invalid position mask such as query and special symbols (PAD, SEP, CLS)
-                1.0 means token should be masked.
+        """Args:
+        **p_mask**: (`optional`) ``torch.FloatTensor`` of shape `(batch_size, seq_len)`
+            invalid position mask such as query and special symbols (PAD, SEP, CLS)
+            1.0 means token should be masked.
         """
         x = self.dense(hidden_states).squeeze(-1)
 
@@ -514,8 +535,8 @@ class PoolerStartLogits(nn.Module):
 
 
 class PoolerEndLogits(nn.Module):
-    """ Compute SQuAD end_logits from sequence hidden states and start token hidden state.
-    """
+    """Compute SQuAD end_logits from sequence hidden states and start token hidden state."""
+
     def __init__(self, config):
         super(PoolerEndLogits, self).__init__()
         self.dense_0 = nn.Linear(config.hidden_size * 2, config.hidden_size)
@@ -524,24 +545,26 @@ class PoolerEndLogits(nn.Module):
         self.dense_1 = nn.Linear(config.hidden_size, 1)
 
     def forward(self, hidden_states, start_states=None, start_positions=None, p_mask=None):
-        """ Args:
-            One of ``start_states``, ``start_positions`` should be not None.
-            If both are set, ``start_positions`` overrides ``start_states``.
+        """Args:
+        One of ``start_states``, ``start_positions`` should be not None.
+        If both are set, ``start_positions`` overrides ``start_states``.
 
-            **start_states**: ``torch.LongTensor`` of shape identical to hidden_states
-                hidden states of the first tokens for the labeled span.
-            **start_positions**: ``torch.LongTensor`` of shape ``(batch_size,)``
-                position of the first token for the labeled span:
-            **p_mask**: (`optional`) ``torch.FloatTensor`` of shape ``(batch_size, seq_len)``
-                Mask of invalid position such as query and special symbols (PAD, SEP, CLS)
-                1.0 means token should be masked.
+        **start_states**: ``torch.LongTensor`` of shape identical to hidden_states
+            hidden states of the first tokens for the labeled span.
+        **start_positions**: ``torch.LongTensor`` of shape ``(batch_size,)``
+            position of the first token for the labeled span:
+        **p_mask**: (`optional`) ``torch.FloatTensor`` of shape ``(batch_size, seq_len)``
+            Mask of invalid position such as query and special symbols (PAD, SEP, CLS)
+            1.0 means token should be masked.
         """
-        assert start_states is not None or start_positions is not None, "One of start_states, start_positions should be not None"
+        assert (
+            start_states is not None or start_positions is not None
+        ), "One of start_states, start_positions should be not None"
         if start_positions is not None:
             slen, hsz = hidden_states.shape[-2:]
-            start_positions = start_positions[:, None, None].expand(-1, -1, hsz) # shape (bsz, 1, hsz)
-            start_states = hidden_states.gather(-2, start_positions) # shape (bsz, 1, hsz)
-            start_states = start_states.expand(-1, slen, -1) # shape (bsz, slen, hsz)
+            start_positions = start_positions[:, None, None].expand(-1, -1, hsz)  # shape (bsz, 1, hsz)
+            start_states = hidden_states.gather(-2, start_positions)  # shape (bsz, 1, hsz)
+            start_states = start_states.expand(-1, slen, -1)  # shape (bsz, slen, hsz)
 
         x = self.dense_0(torch.cat([hidden_states, start_states], dim=-1))
         x = self.activation(x)
@@ -558,7 +581,8 @@ class PoolerEndLogits(nn.Module):
 
 
 class PoolerAnswerClass(nn.Module):
-    """ Compute SQuAD 2.0 answer class from classification and start tokens hidden states. """
+    """Compute SQuAD 2.0 answer class from classification and start tokens hidden states."""
+
     def __init__(self, config):
         super(PoolerAnswerClass, self).__init__()
         self.dense_0 = nn.Linear(config.hidden_size * 2, config.hidden_size)
@@ -583,16 +607,18 @@ class PoolerAnswerClass(nn.Module):
                 for each sample
         """
         hsz = hidden_states.shape[-1]
-        assert start_states is not None or start_positions is not None, "One of start_states, start_positions should be not None"
+        assert (
+            start_states is not None or start_positions is not None
+        ), "One of start_states, start_positions should be not None"
         if start_positions is not None:
-            start_positions = start_positions[:, None, None].expand(-1, -1, hsz) # shape (bsz, 1, hsz)
-            start_states = hidden_states.gather(-2, start_positions).squeeze(-2) # shape (bsz, hsz)
+            start_positions = start_positions[:, None, None].expand(-1, -1, hsz)  # shape (bsz, 1, hsz)
+            start_states = hidden_states.gather(-2, start_positions).squeeze(-2)  # shape (bsz, hsz)
 
         if cls_index is not None:
-            cls_index = cls_index[:, None, None].expand(-1, -1, hsz) # shape (bsz, 1, hsz)
-            cls_token_state = hidden_states.gather(-2, cls_index).squeeze(-2) # shape (bsz, hsz)
+            cls_index = cls_index[:, None, None].expand(-1, -1, hsz)  # shape (bsz, 1, hsz)
+            cls_token_state = hidden_states.gather(-2, cls_index).squeeze(-2)  # shape (bsz, hsz)
         else:
-            cls_token_state = hidden_states[:, -1, :] # shape (bsz, hsz)
+            cls_token_state = hidden_states[:, -1, :]  # shape (bsz, hsz)
 
         x = self.dense_0(torch.cat([start_states, cls_token_state], dim=-1))
         x = self.activation(x)
@@ -602,7 +628,7 @@ class PoolerAnswerClass(nn.Module):
 
 
 class SQuADHead(nn.Module):
-    r""" A SQuAD head inspired by XLNet.
+    r"""A SQuAD head inspired by XLNet.
 
     Parameters:
         config (:class:`~transformers.XLNetConfig`): Model configuration class with all the parameters of the model.
@@ -641,6 +667,7 @@ class SQuADHead(nn.Module):
             ``torch.FloatTensor`` of shape ``(batch_size,)``
             Log probabilities for the ``is_impossible`` label of the answers.
     """
+
     def __init__(self, config):
         super(SQuADHead, self).__init__()
         self.start_n_top = config.start_n_top
@@ -650,8 +677,9 @@ class SQuADHead(nn.Module):
         self.end_logits = PoolerEndLogits(config)
         self.answer_class = PoolerAnswerClass(config)
 
-    def forward(self, hidden_states, start_positions=None, end_positions=None,
-                cls_index=None, is_impossible=None, p_mask=None):
+    def forward(
+        self, hidden_states, start_positions=None, end_positions=None, cls_index=None, is_impossible=None, p_mask=None
+    ):
         outputs = ()
 
         start_logits = self.start_logits(hidden_states, p_mask=p_mask)
@@ -684,19 +712,25 @@ class SQuADHead(nn.Module):
         else:
             # during inference, compute the end logits based on beam search
             bsz, slen, hsz = hidden_states.size()
-            start_log_probs = F.softmax(start_logits, dim=-1) # shape (bsz, slen)
+            start_log_probs = F.softmax(start_logits, dim=-1)  # shape (bsz, slen)
 
-            start_top_log_probs, start_top_index = torch.topk(start_log_probs, self.start_n_top, dim=-1) # shape (bsz, start_n_top)
-            start_top_index_exp = start_top_index.unsqueeze(-1).expand(-1, -1, hsz) # shape (bsz, start_n_top, hsz)
-            start_states = torch.gather(hidden_states, -2, start_top_index_exp) # shape (bsz, start_n_top, hsz)
-            start_states = start_states.unsqueeze(1).expand(-1, slen, -1, -1) # shape (bsz, slen, start_n_top, hsz)
+            start_top_log_probs, start_top_index = torch.topk(
+                start_log_probs, self.start_n_top, dim=-1
+            )  # shape (bsz, start_n_top)
+            start_top_index_exp = start_top_index.unsqueeze(-1).expand(-1, -1, hsz)  # shape (bsz, start_n_top, hsz)
+            start_states = torch.gather(hidden_states, -2, start_top_index_exp)  # shape (bsz, start_n_top, hsz)
+            start_states = start_states.unsqueeze(1).expand(-1, slen, -1, -1)  # shape (bsz, slen, start_n_top, hsz)
 
-            hidden_states_expanded = hidden_states.unsqueeze(2).expand_as(start_states) # shape (bsz, slen, start_n_top, hsz)
+            hidden_states_expanded = hidden_states.unsqueeze(2).expand_as(
+                start_states
+            )  # shape (bsz, slen, start_n_top, hsz)
             p_mask = p_mask.unsqueeze(-1) if p_mask is not None else None
             end_logits = self.end_logits(hidden_states_expanded, start_states=start_states, p_mask=p_mask)
-            end_log_probs = F.softmax(end_logits, dim=1) # shape (bsz, slen, start_n_top)
+            end_log_probs = F.softmax(end_logits, dim=1)  # shape (bsz, slen, start_n_top)
 
-            end_top_log_probs, end_top_index = torch.topk(end_log_probs, self.end_n_top, dim=1) # shape (bsz, end_n_top, start_n_top)
+            end_top_log_probs, end_top_index = torch.topk(
+                end_log_probs, self.end_n_top, dim=1
+            )  # shape (bsz, end_n_top, start_n_top)
             end_top_log_probs = end_top_log_probs.view(-1, self.start_n_top * self.end_n_top)
             end_top_index = end_top_index.view(-1, self.start_n_top * self.end_n_top)
 
@@ -711,72 +745,73 @@ class SQuADHead(nn.Module):
 
 
 class SequenceSummary(nn.Module):
-    r""" Compute a single vector summary of a sequence hidden states according to various possibilities:
-        Args of the config class:
-            summary_type:
-                - 'last' => [default] take the last token hidden state (like XLNet)
-                - 'first' => take the first token hidden state (like Bert)
-                - 'mean' => take the mean of all tokens hidden states
-                - 'cls_index' => supply a Tensor of classification token position (GPT/GPT-2)
-                - 'attn' => Not implemented now, use multi-head attention
-            summary_use_proj: Add a projection after the vector extraction
-            summary_proj_to_labels: If True, the projection outputs to config.num_labels classes (otherwise to hidden_size). Default: False.
-            summary_activation: 'tanh' => add a tanh activation to the output, Other => no activation. Default
-            summary_first_dropout: Add a dropout before the projection and activation
-            summary_last_dropout: Add a dropout after the projection and activation
+    r"""Compute a single vector summary of a sequence hidden states according to various possibilities:
+    Args of the config class:
+        summary_type:
+            - 'last' => [default] take the last token hidden state (like XLNet)
+            - 'first' => take the first token hidden state (like Bert)
+            - 'mean' => take the mean of all tokens hidden states
+            - 'cls_index' => supply a Tensor of classification token position (GPT/GPT-2)
+            - 'attn' => Not implemented now, use multi-head attention
+        summary_use_proj: Add a projection after the vector extraction
+        summary_proj_to_labels: If True, the projection outputs to config.num_labels classes (otherwise to hidden_size). Default: False.
+        summary_activation: 'tanh' => add a tanh activation to the output, Other => no activation. Default
+        summary_first_dropout: Add a dropout before the projection and activation
+        summary_last_dropout: Add a dropout after the projection and activation
     """
+
     def __init__(self, config):
         super(SequenceSummary, self).__init__()
 
-        self.summary_type = config.summary_type if hasattr(config, 'summary_use_proj') else 'last'
-        if self.summary_type == 'attn':
+        self.summary_type = config.summary_type if hasattr(config, "summary_use_proj") else "last"
+        if self.summary_type == "attn":
             # We should use a standard multi-head attention module with absolute positional embedding for that.
             # Cf. https://github.com/zihangdai/xlnet/blob/master/modeling.py#L253-L276
             # We can probably just use the multi-head attention module of PyTorch >=1.1.0
             raise NotImplementedError
 
         self.summary = Identity()
-        if hasattr(config, 'summary_use_proj') and config.summary_use_proj:
-            if hasattr(config, 'summary_proj_to_labels') and config.summary_proj_to_labels and config.num_labels > 0:
+        if hasattr(config, "summary_use_proj") and config.summary_use_proj:
+            if hasattr(config, "summary_proj_to_labels") and config.summary_proj_to_labels and config.num_labels > 0:
                 num_classes = config.num_labels
             else:
                 num_classes = config.hidden_size
             self.summary = nn.Linear(config.hidden_size, num_classes)
 
         self.activation = Identity()
-        if hasattr(config, 'summary_activation') and config.summary_activation == 'tanh':
+        if hasattr(config, "summary_activation") and config.summary_activation == "tanh":
             self.activation = nn.Tanh()
 
         self.first_dropout = Identity()
-        if hasattr(config, 'summary_first_dropout') and config.summary_first_dropout > 0:
+        if hasattr(config, "summary_first_dropout") and config.summary_first_dropout > 0:
             self.first_dropout = nn.Dropout(config.summary_first_dropout)
 
         self.last_dropout = Identity()
-        if hasattr(config, 'summary_last_dropout') and config.summary_last_dropout > 0:
+        if hasattr(config, "summary_last_dropout") and config.summary_last_dropout > 0:
             self.last_dropout = nn.Dropout(config.summary_last_dropout)
 
     def forward(self, hidden_states, cls_index=None):
-        """ hidden_states: float Tensor in shape [bsz, ..., seq_len, hidden_size], the hidden-states of the last layer.
-            cls_index: [optional] position of the classification token if summary_type == 'cls_index',
-                shape (bsz,) or more generally (bsz, ...) where ... are optional leading dimensions of hidden_states.
-                if summary_type == 'cls_index' and cls_index is None:
-                    we take the last token of the sequence as classification token
+        """hidden_states: float Tensor in shape [bsz, ..., seq_len, hidden_size], the hidden-states of the last layer.
+        cls_index: [optional] position of the classification token if summary_type == 'cls_index',
+            shape (bsz,) or more generally (bsz, ...) where ... are optional leading dimensions of hidden_states.
+            if summary_type == 'cls_index' and cls_index is None:
+                we take the last token of the sequence as classification token
         """
-        if self.summary_type == 'last':
+        if self.summary_type == "last":
             output = hidden_states[:, -1]
-        elif self.summary_type == 'first':
+        elif self.summary_type == "first":
             output = hidden_states[:, 0]
-        elif self.summary_type == 'mean':
+        elif self.summary_type == "mean":
             output = hidden_states.mean(dim=1)
-        elif self.summary_type == 'cls_index':
+        elif self.summary_type == "cls_index":
             if cls_index is None:
-                cls_index = torch.full_like(hidden_states[..., :1, :], hidden_states.shape[-2]-1, dtype=torch.long)
+                cls_index = torch.full_like(hidden_states[..., :1, :], hidden_states.shape[-2] - 1, dtype=torch.long)
             else:
                 cls_index = cls_index.unsqueeze(-1).unsqueeze(-1)
-                cls_index = cls_index.expand((-1,) * (cls_index.dim()-1) + (hidden_states.size(-1),))
+                cls_index = cls_index.expand((-1,) * (cls_index.dim() - 1) + (hidden_states.size(-1),))
             # shape of cls_index: (bsz, XX, 1, hidden_size) where XX are optional leading dim of hidden_states
-            output = hidden_states.gather(-2, cls_index).squeeze(-2) # shape (bsz, XX, hidden_size)
-        elif self.summary_type == 'attn':
+            output = hidden_states.gather(-2, cls_index).squeeze(-2)  # shape (bsz, XX, hidden_size)
+        elif self.summary_type == "attn":
             raise NotImplementedError
 
         output = self.first_dropout(output)
@@ -788,9 +823,9 @@ class SequenceSummary(nn.Module):
 
 
 def prune_linear_layer(layer, index, dim=0):
-    """ Prune a linear layer (a model parameters) to keep only entries in index.
-        Return the pruned layer as a new layer with requires_grad=True.
-        Used to remove heads.
+    """Prune a linear layer (a model parameters) to keep only entries in index.
+    Return the pruned layer as a new layer with requires_grad=True.
+    Used to remove heads.
     """
     index = index.to(layer.weight.device)
     W = layer.weight.index_select(dim, index).clone().detach()
@@ -813,10 +848,10 @@ def prune_linear_layer(layer, index, dim=0):
 
 
 def prune_conv1d_layer(layer, index, dim=1):
-    """ Prune a Conv1D layer (a model parameters) to keep only entries in index.
-        A Conv1D work as a Linear layer (see e.g. BERT) but the weights are transposed.
-        Return the pruned layer as a new layer with requires_grad=True.
-        Used to remove heads.
+    """Prune a Conv1D layer (a model parameters) to keep only entries in index.
+    A Conv1D work as a Linear layer (see e.g. BERT) but the weights are transposed.
+    Return the pruned layer as a new layer with requires_grad=True.
+    Used to remove heads.
     """
     index = index.to(layer.weight.device)
     W = layer.weight.index_select(dim, index).clone().detach()
@@ -837,9 +872,9 @@ def prune_conv1d_layer(layer, index, dim=1):
 
 
 def prune_layer(layer, index, dim=None):
-    """ Prune a Conv1D or nn.Linear layer (a model parameters) to keep only entries in index.
-        Return the pruned layer as a new layer with requires_grad=True.
-        Used to remove heads.
+    """Prune a Conv1D or nn.Linear layer (a model parameters) to keep only entries in index.
+    Return the pruned layer as a new layer with requires_grad=True.
+    Used to remove heads.
     """
     if isinstance(layer, nn.Linear):
         return prune_linear_layer(layer, index, dim=0 if dim is None else dim)

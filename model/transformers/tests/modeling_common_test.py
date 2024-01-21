@@ -12,61 +12,64 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import copy
-import sys
-import os
-import shutil
-import tempfile
 import json
+import logging
+import os
 import random
+import shutil
+import sys
+import tempfile
+import unittest
 import uuid
 
-import unittest
-import logging
 import pytest
-
 from transformers import is_torch_available
 
 if is_torch_available():
-    import torch
     import numpy as np
-
-    from transformers import (AdaptiveEmbedding, PretrainedConfig, PreTrainedModel,
-                                    BertModel, BertConfig, BERT_PRETRAINED_MODEL_ARCHIVE_MAP,
-                                    GPT2LMHeadModel, GPT2Config, GPT2_PRETRAINED_MODEL_ARCHIVE_MAP)
+    import torch
+    from transformers import (
+        BERT_PRETRAINED_MODEL_ARCHIVE_MAP,
+        AdaptiveEmbedding,
+        BertConfig,
+        BertModel,
+        PretrainedConfig,
+        PreTrainedModel,
+    )
 else:
     pytestmark = pytest.mark.skip("Require Torch")
 
 if sys.version_info[0] == 2:
-    import cPickle as pickle
+    pass
 
     class TemporaryDirectory(object):
         """Context manager for tempfile.mkdtemp() so it's usable with "with" statement."""
+
         def __enter__(self):
             self.name = tempfile.mkdtemp()
             return self.name
+
         def __exit__(self, exc_type, exc_value, traceback):
             shutil.rmtree(self.name)
+
 else:
-    import pickle
     TemporaryDirectory = tempfile.TemporaryDirectory
     unicode = str
+
 
 def _config_zero_init(config):
     configs_no_init = copy.deepcopy(config)
     for key in configs_no_init.__dict__.keys():
-        if '_range' in key or '_std' in key:
+        if "_range" in key or "_std" in key:
             setattr(configs_no_init, key, 0.0)
     return configs_no_init
 
+
 class CommonTestCases:
-
     class CommonModelTester(unittest.TestCase):
-
         model_tester = None
         all_model_classes = ()
         test_torchscript = True
@@ -105,8 +108,11 @@ class CommonTestCases:
                 model = model_class(config=configs_no_init)
                 for name, param in model.named_parameters():
                     if param.requires_grad:
-                        self.assertIn(param.data.mean().item(), [0.0, 1.0],
-                        msg="Parameter {} of model {} seems not properly initialized".format(name, model_class))
+                        self.assertIn(
+                            param.data.mean().item(),
+                            [0.0, 1.0],
+                            msg="Parameter {} of model {} seems not properly initialized".format(name, model_class),
+                        )
 
         def test_determinism(self):
             config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
@@ -116,7 +122,6 @@ class CommonTestCases:
                 model.eval()
                 first, second = model(inputs_dict["input_ids"])[0], model(inputs_dict["input_ids"])[0]
                 self.assertEqual(first.ne(second).sum().item(), 0)
-
 
         def test_attention_outputs(self):
             config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
@@ -133,9 +138,14 @@ class CommonTestCases:
                 self.assertEqual(len(attentions), self.model_tester.num_hidden_layers)
                 self.assertListEqual(
                     list(attentions[0].shape[-3:]),
-                    [self.model_tester.num_attention_heads,
-                    self.model_tester.seq_length,
-                    self.model_tester.key_len if hasattr(self.model_tester, 'key_len') else self.model_tester.seq_length])
+                    [
+                        self.model_tester.num_attention_heads,
+                        self.model_tester.seq_length,
+                        self.model_tester.key_len
+                        if hasattr(self.model_tester, "key_len")
+                        else self.model_tester.seq_length,
+                    ],
+                )
                 out_len = len(outputs)
 
                 # Check attention is always last and order is fine
@@ -144,7 +154,7 @@ class CommonTestCases:
                 model = model_class(config)
                 model.eval()
                 outputs = model(**inputs_dict)
-                self.assertEqual(out_len+1, len(outputs))
+                self.assertEqual(out_len + 1, len(outputs))
                 self.assertEqual(model.config.output_attentions, True)
                 self.assertEqual(model.config.output_hidden_states, True)
 
@@ -152,9 +162,14 @@ class CommonTestCases:
                 self.assertEqual(len(attentions), self.model_tester.num_hidden_layers)
                 self.assertListEqual(
                     list(attentions[0].shape[-3:]),
-                    [self.model_tester.num_attention_heads,
-                    self.model_tester.seq_length,
-                    self.model_tester.key_len if hasattr(self.model_tester, 'key_len') else self.model_tester.seq_length])
+                    [
+                        self.model_tester.num_attention_heads,
+                        self.model_tester.seq_length,
+                        self.model_tester.key_len
+                        if hasattr(self.model_tester, "key_len")
+                        else self.model_tester.seq_length,
+                    ],
+                )
 
         def test_torchscript(self):
             config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
@@ -182,7 +197,7 @@ class CommonTestCases:
             for model_class in self.all_model_classes:
                 model = model_class(config=configs_no_init)
                 model.eval()
-                inputs = inputs_dict['input_ids']  # Let's keep only input_ids
+                inputs = inputs_dict["input_ids"]  # Let's keep only input_ids
 
                 try:
                     torch.jit.trace(model, inputs)
@@ -214,7 +229,6 @@ class CommonTestCases:
 
                 self.assertTrue(models_equal)
 
-
         def test_headmasking(self):
             if not self.test_head_masking:
                 return
@@ -237,7 +251,7 @@ class CommonTestCases:
                 head_mask[-1, :-1] = 0
                 head_mask.requires_grad_(requires_grad=True)
                 inputs = inputs_dict.copy()
-                inputs['head_mask'] = head_mask
+                inputs["head_mask"] = head_mask
 
                 outputs = model(**inputs)
 
@@ -248,26 +262,24 @@ class CommonTestCases:
                 multihead_outputs = head_mask.grad
 
                 attentions = outputs[-1]
-                hidden_states = outputs[-2]
+                outputs[-2]
 
                 # Remove Nan
                 for t in attentions:
-                    self.assertLess(torch.sum(torch.isnan(t)), t.numel() / 4)  # Check we don't have more than 25% nans (arbitrary)
-                attentions = [t.masked_fill(torch.isnan(t), 0.0) for t in attentions]  # remove them (the test is less complete)
+                    self.assertLess(
+                        torch.sum(torch.isnan(t)), t.numel() / 4
+                    )  # Check we don't have more than 25% nans (arbitrary)
+                attentions = [
+                    t.masked_fill(torch.isnan(t), 0.0) for t in attentions
+                ]  # remove them (the test is less complete)
 
                 self.assertIsNotNone(multihead_outputs)
                 self.assertEqual(len(multihead_outputs), self.model_tester.num_hidden_layers)
-                self.assertAlmostEqual(
-                    attentions[0][..., 0, :, :].flatten().sum().item(), 0.0)
-                self.assertNotEqual(
-                    attentions[0][..., -1, :, :].flatten().sum().item(), 0.0)
-                self.assertNotEqual(
-                    attentions[1][..., 0, :, :].flatten().sum().item(), 0.0)
-                self.assertAlmostEqual(
-                    attentions[-1][..., -2, :, :].flatten().sum().item(), 0.0)
-                self.assertNotEqual(
-                    attentions[-1][..., -1, :, :].flatten().sum().item(), 0.0)
-
+                self.assertAlmostEqual(attentions[0][..., 0, :, :].flatten().sum().item(), 0.0)
+                self.assertNotEqual(attentions[0][..., -1, :, :].flatten().sum().item(), 0.0)
+                self.assertNotEqual(attentions[1][..., 0, :, :].flatten().sum().item(), 0.0)
+                self.assertAlmostEqual(attentions[-1][..., -2, :, :].flatten().sum().item(), 0.0)
+                self.assertNotEqual(attentions[-1][..., -1, :, :].flatten().sum().item(), 0.0)
 
         def test_head_pruning(self):
             if not self.test_pruning:
@@ -283,19 +295,15 @@ class CommonTestCases:
                 config.output_hidden_states = False
                 model = model_class(config=config)
                 model.eval()
-                heads_to_prune = {0: list(range(1, self.model_tester.num_attention_heads)),
-                                -1: [0]}
+                heads_to_prune = {0: list(range(1, self.model_tester.num_attention_heads)), -1: [0]}
                 model.prune_heads(heads_to_prune)
                 outputs = model(**inputs_dict)
 
                 attentions = outputs[-1]
 
-                self.assertEqual(
-                    attentions[0].shape[-3], 1)
-                self.assertEqual(
-                    attentions[1].shape[-3], self.model_tester.num_attention_heads)
-                self.assertEqual(
-                    attentions[-1].shape[-3], self.model_tester.num_attention_heads - 1)
+                self.assertEqual(attentions[0].shape[-3], 1)
+                self.assertEqual(attentions[1].shape[-3], self.model_tester.num_attention_heads)
+                self.assertEqual(attentions[-1].shape[-3], self.model_tester.num_attention_heads - 1)
 
         def test_head_pruning_save_load_from_pretrained(self):
             if not self.test_pruning:
@@ -311,8 +319,7 @@ class CommonTestCases:
                 config.output_hidden_states = False
                 model = model_class(config=config)
                 model.eval()
-                heads_to_prune = {0: list(range(1, self.model_tester.num_attention_heads)),
-                                -1: [0]}
+                heads_to_prune = {0: list(range(1, self.model_tester.num_attention_heads)), -1: [0]}
                 model.prune_heads(heads_to_prune)
                 directory = "pruned_model"
                 if not os.path.exists(directory):
@@ -341,8 +348,7 @@ class CommonTestCases:
                 config.output_attentions = True
                 config.output_hidden_states = False
 
-                heads_to_prune = {0: list(range(1, self.model_tester.num_attention_heads)),
-                                 -1: [0]}
+                heads_to_prune = {0: list(range(1, self.model_tester.num_attention_heads)), -1: [0]}
                 config.pruned_heads = heads_to_prune
 
                 model = model_class(config=config)
@@ -404,13 +410,12 @@ class CommonTestCases:
                 outputs = model(**inputs_dict)
                 attentions = outputs[-1]
 
-                self.assertEqual(attentions[0].shape[-3], self.model_tester.num_attention_heads -1)
+                self.assertEqual(attentions[0].shape[-3], self.model_tester.num_attention_heads - 1)
                 self.assertEqual(attentions[1].shape[-3], self.model_tester.num_attention_heads - 2)
                 self.assertEqual(attentions[2].shape[-3], self.model_tester.num_attention_heads - 2)
                 self.assertEqual(attentions[3].shape[-3], self.model_tester.num_attention_heads)
 
                 self.assertDictEqual(model.config.pruned_heads, {0: [0], 1: [1, 2], 2: [1, 2]})
-
 
         def test_hidden_states_output(self):
             config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
@@ -426,8 +431,8 @@ class CommonTestCases:
                 self.assertEqual(model.config.output_hidden_states, True)
                 self.assertEqual(len(hidden_states), self.model_tester.num_hidden_layers + 1)
                 self.assertListEqual(
-                    list(hidden_states[0].shape[-2:]),
-                    [self.model_tester.seq_length, self.model_tester.hidden_size])
+                    list(hidden_states[0].shape[-2:]), [self.model_tester.seq_length, self.model_tester.hidden_size]
+                )
 
         def test_resize_tokens_embeddings(self):
             original_config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
@@ -468,15 +473,10 @@ class CommonTestCases:
 
             for model_class in self.all_model_classes:
                 model = model_class(config)
-                self.assertIsInstance(
-                    model.get_input_embeddings(),
-                    (torch.nn.Embedding, AdaptiveEmbedding)
-                )
+                self.assertIsInstance(model.get_input_embeddings(), (torch.nn.Embedding, AdaptiveEmbedding))
                 model.set_input_embeddings(torch.nn.Embedding(10, 10))
                 x = model.get_output_embeddings()
-                self.assertTrue(
-                    x is None or isinstance(x, torch.nn.Linear)
-                )
+                self.assertTrue(x is None or isinstance(x, torch.nn.Linear))
 
         def test_tie_model_weights(self):
             if not self.test_torchscript:
@@ -542,34 +542,33 @@ class CommonTestCases:
 
                 wte = model.get_input_embeddings()
                 inputs_dict["inputs_embeds"] = wte(input_ids)
-                outputs = model(**inputs_dict)
-
+                model(**inputs_dict)
 
     class GPTModelTester(CommonModelTester):
-
-        def __init__(self,
-                        parent,
-                        batch_size=13,
-                        seq_length=7,
-                        is_training=True,
-                        use_position_ids=True,
-                        use_token_type_ids=True,
-                        use_labels=True,
-                        vocab_size=99,
-                        n_positions=33,
-                        hidden_size=32,
-                        num_hidden_layers=5,
-                        num_attention_heads=4,
-                        n_choices=3,
-                        type_sequence_label_size=2,
-                        initializer_range=0.02,
-                        num_labels=3,
-                        scope=None,
-                        config_class=None,
-                        base_model_class=None,
-                        lm_head_model_class=None,
-                        double_head_model_class=None,
-                        ):
+        def __init__(
+            self,
+            parent,
+            batch_size=13,
+            seq_length=7,
+            is_training=True,
+            use_position_ids=True,
+            use_token_type_ids=True,
+            use_labels=True,
+            vocab_size=99,
+            n_positions=33,
+            hidden_size=32,
+            num_hidden_layers=5,
+            num_attention_heads=4,
+            n_choices=3,
+            type_sequence_label_size=2,
+            initializer_range=0.02,
+            num_labels=3,
+            scope=None,
+            config_class=None,
+            base_model_class=None,
+            lm_head_model_class=None,
+            double_head_model_class=None,
+        ):
             self.parent = parent
             self.batch_size = batch_size
             self.seq_length = seq_length
@@ -620,13 +619,14 @@ class CommonTestCases:
                 n_embd=self.hidden_size,
                 n_layer=self.num_hidden_layers,
                 n_head=self.num_attention_heads,
-                initializer_range=self.initializer_range)
+                initializer_range=self.initializer_range,
+            )
 
-            return (config, input_ids, token_type_ids, position_ids,
-                    mc_labels, lm_labels, mc_token_ids)
+            return (config, input_ids, token_type_ids, position_ids, mc_labels, lm_labels, mc_token_ids)
 
-        def create_and_check_base_model(self, config, input_ids, token_type_ids, position_ids,
-                                mc_labels, lm_labels, mc_token_ids):
+        def create_and_check_base_model(
+            self, config, input_ids, token_type_ids, position_ids, mc_labels, lm_labels, mc_token_ids
+        ):
             model = self.base_model_class(config)
             model.eval()
 
@@ -636,12 +636,12 @@ class CommonTestCases:
 
             hidden_state = outputs[0]
             self.parent.assertListEqual(
-                list(hidden_state.size()),
-                [self.batch_size, self.n_choices, self.seq_length, self.hidden_size])
+                list(hidden_state.size()), [self.batch_size, self.n_choices, self.seq_length, self.hidden_size]
+            )
 
-
-        def create_and_check_lm_head(self, config, input_ids, token_type_ids, position_ids,
-                                        mc_labels, lm_labels, mc_token_ids):
+        def create_and_check_lm_head(
+            self, config, input_ids, token_type_ids, position_ids, mc_labels, lm_labels, mc_token_ids
+        ):
             model = self.lm_head_model_class(config)
             model.eval()
             outputs = model(input_ids, position_ids, token_type_ids, lm_labels)
@@ -649,14 +649,13 @@ class CommonTestCases:
 
             total_voc = self.vocab_size
             self.parent.assertListEqual(
-                list(lm_logits.size()),
-                [self.batch_size, self.n_choices, self.seq_length, total_voc])
-            self.parent.assertListEqual(
-                list(loss.size()),
-                [])
+                list(lm_logits.size()), [self.batch_size, self.n_choices, self.seq_length, total_voc]
+            )
+            self.parent.assertListEqual(list(loss.size()), [])
 
-        def create_and_check_presents(self, config, input_ids, token_type_ids, position_ids,
-                                        mc_labels, lm_labels, mc_token_ids):
+        def create_and_check_presents(
+            self, config, input_ids, token_type_ids, position_ids, mc_labels, lm_labels, mc_token_ids
+        ):
             for model_class in self.all_model_classes:
                 model = model_class(config)
                 model.eval()
@@ -665,28 +664,37 @@ class CommonTestCases:
                 self.parent.assertEqual(self.num_hidden_layers, len(presents))
                 self.parent.assertListEqual(
                     list(presents[0].size()),
-                    [2, self.batch_size * self.n_choices, self.num_attention_heads,
-                        self.seq_length, self.hidden_size // self.num_attention_heads])
+                    [
+                        2,
+                        self.batch_size * self.n_choices,
+                        self.num_attention_heads,
+                        self.seq_length,
+                        self.hidden_size // self.num_attention_heads,
+                    ],
+                )
 
-        def create_and_check_double_heads(self, config, input_ids, token_type_ids, position_ids,
-                                        mc_labels, lm_labels, mc_token_ids):
+        def create_and_check_double_heads(
+            self, config, input_ids, token_type_ids, position_ids, mc_labels, lm_labels, mc_token_ids
+        ):
             model = self.double_head_model_class(config)
             model.eval()
-            outputs = model(input_ids, mc_token_ids, lm_labels=lm_labels, mc_labels=mc_labels,
-                            token_type_ids=token_type_ids, position_ids=position_ids)
+            outputs = model(
+                input_ids,
+                mc_token_ids,
+                lm_labels=lm_labels,
+                mc_labels=mc_labels,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+            )
             lm_loss, mc_loss, lm_logits, mc_logits = outputs[:4]
             loss = [lm_loss, mc_loss]
 
             total_voc = self.vocab_size
             self.parent.assertListEqual(
-                list(lm_logits.size()),
-                [self.batch_size, self.n_choices, self.seq_length, total_voc])
-            self.parent.assertListEqual(
-                list(mc_logits.size()),
-                [self.batch_size, self.n_choices])
-            self.parent.assertListEqual(
-                [list(l.size()) for l in loss],
-                [[], []])
+                list(lm_logits.size()), [self.batch_size, self.n_choices, self.seq_length, total_voc]
+            )
+            self.parent.assertListEqual(list(mc_logits.size()), [self.batch_size, self.n_choices])
+            self.parent.assertListEqual([list(l.size()) for l in loss], [[], []])
 
         def create_and_check_model_from_pretrained(self):
             cache_dir = "/tmp/transformers_test/"
@@ -697,9 +705,8 @@ class CommonTestCases:
 
         def prepare_config_and_inputs_for_common(self):
             config_and_inputs = self.prepare_config_and_inputs()
-            (config, input_ids, token_type_ids, position_ids,
-                mc_labels, lm_labels, mc_token_ids) = config_and_inputs
-            inputs_dict = {'input_ids': input_ids}
+            (config, input_ids, token_type_ids, position_ids, mc_labels, lm_labels, mc_token_ids) = config_and_inputs
+            inputs_dict = {"input_ids": input_ids}
             return config, inputs_dict
 
         def run_common_tests(self, test_presents=False):
@@ -729,10 +736,10 @@ class ConfigTester(object):
 
     def create_and_test_config_common_properties(self):
         config = self.config_class(**self.inputs_dict)
-        self.parent.assertTrue(hasattr(config, 'vocab_size'))
-        self.parent.assertTrue(hasattr(config, 'hidden_size'))
-        self.parent.assertTrue(hasattr(config, 'num_attention_heads'))
-        self.parent.assertTrue(hasattr(config, 'num_hidden_layers'))
+        self.parent.assertTrue(hasattr(config, "vocab_size"))
+        self.parent.assertTrue(hasattr(config, "hidden_size"))
+        self.parent.assertTrue(hasattr(config, "num_attention_heads"))
+        self.parent.assertTrue(hasattr(config, "num_hidden_layers"))
 
     def create_and_test_config_to_json_string(self):
         config = self.config_class(**self.inputs_dict)

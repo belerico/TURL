@@ -12,27 +12,29 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
-import unittest
-import shutil
-import pytest
 import logging
+import unittest
 
+import pytest
 from transformers import is_torch_available
 
 if is_torch_available():
-    from transformers import (AutoConfig, BertConfig,
-                                    AutoModel, BertModel,
-                                    AutoModelWithLMHead, BertForMaskedLM,
-                                    AutoModelForSequenceClassification, BertForSequenceClassification,
-                                    AutoModelForQuestionAnswering, BertForQuestionAnswering)
+    from transformers import (
+        AutoConfig,
+        AutoModel,
+        AutoModelForQuestionAnswering,
+        AutoModelForSequenceClassification,
+        AutoModelWithLMHead,
+        BertConfig,
+        BertForMaskedLM,
+        BertForQuestionAnswering,
+        BertForSequenceClassification,
+        BertModel,
+    )
     from transformers.modeling_bert import BERT_PRETRAINED_MODEL_ARCHIVE_MAP
 
-    from .modeling_common_test import (CommonTestCases, ids_tensor)
-    from .configuration_common_test import ConfigTester
 else:
     pytestmark = pytest.mark.skip("Require Torch")
 
@@ -75,7 +77,9 @@ class AutoModelTest(unittest.TestCase):
             self.assertIsInstance(config, BertConfig)
 
             model = AutoModelForSequenceClassification.from_pretrained(model_name)
-            model, loading_info = AutoModelForSequenceClassification.from_pretrained(model_name, output_loading_info=True)
+            model, loading_info = AutoModelForSequenceClassification.from_pretrained(
+                model_name, output_loading_info=True
+            )
             self.assertIsNotNone(model)
             self.assertIsInstance(model, BertForSequenceClassification)
 

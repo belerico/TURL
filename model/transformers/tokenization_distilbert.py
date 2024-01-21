@@ -16,29 +16,24 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import collections
 import logging
-import os
-import unicodedata
-from io import open
 
 from .tokenization_bert import BertTokenizer
 
 logger = logging.getLogger(__name__)
 
-VOCAB_FILES_NAMES = {'vocab_file': 'vocab.txt'}
+VOCAB_FILES_NAMES = {"vocab_file": "vocab.txt"}
 
 PRETRAINED_VOCAB_FILES_MAP = {
-    'vocab_file':
-    {
-        'distilbert-base-uncased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-vocab.txt",
-        'distilbert-base-uncased-distilled-squad': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-vocab.txt",
+    "vocab_file": {
+        "distilbert-base-uncased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-vocab.txt",
+        "distilbert-base-uncased-distilled-squad": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-vocab.txt",
     }
 }
 
 PRETRAINED_POSITIONAL_EMBEDDINGS_SIZES = {
-    'distilbert-base-uncased': 512,
-    'distilbert-base-uncased-distilled-squad': 512,
+    "distilbert-base-uncased": 512,
+    "distilbert-base-uncased-distilled-squad": 512,
 }
 
 

@@ -19,49 +19,53 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import logging
 
 from .tokenization_bert import BertTokenizer
-from .tokenization_openai import OpenAIGPTTokenizer
-from .tokenization_gpt2 import GPT2Tokenizer
-from .tokenization_ctrl import CTRLTokenizer
-from .tokenization_transfo_xl import TransfoXLTokenizer
-from .tokenization_xlnet import XLNetTokenizer
-from .tokenization_xlm import XLMTokenizer
-from .tokenization_roberta import RobertaTokenizer
-from .tokenization_distilbert import DistilBertTokenizer
 from .tokenization_camembert import CamembertTokenizer
+from .tokenization_ctrl import CTRLTokenizer
+from .tokenization_distilbert import DistilBertTokenizer
+from .tokenization_gpt2 import GPT2Tokenizer
+from .tokenization_openai import OpenAIGPTTokenizer
+from .tokenization_roberta import RobertaTokenizer
+from .tokenization_transfo_xl import TransfoXLTokenizer
+from .tokenization_xlm import XLMTokenizer
+from .tokenization_xlnet import XLNetTokenizer
 
 logger = logging.getLogger(__name__)
 
+
 class AutoTokenizer(object):
     r""":class:`~transformers.AutoTokenizer` is a generic tokenizer class
-        that will be instantiated as one of the tokenizer classes of the library
-        when created with the `AutoTokenizer.from_pretrained(pretrained_model_name_or_path)`
-        class method.
+    that will be instantiated as one of the tokenizer classes of the library
+    when created with the `AutoTokenizer.from_pretrained(pretrained_model_name_or_path)`
+    class method.
 
-        The `from_pretrained()` method take care of returning the correct tokenizer class instance
-        using pattern matching on the `pretrained_model_name_or_path` string.
+    The `from_pretrained()` method take care of returning the correct tokenizer class instance
+    using pattern matching on the `pretrained_model_name_or_path` string.
 
-        The tokenizer class to instantiate is selected as the first pattern matching
-        in the `pretrained_model_name_or_path` string (in the following order):
-            - contains `camembert`: CamembertTokenizer (CamemBERT model)
-            - contains `distilbert`: DistilBertTokenizer (DistilBert model)
-            - contains `roberta`: RobertaTokenizer (RoBERTa model)
-            - contains `bert`: BertTokenizer (Bert model)
-            - contains `openai-gpt`: OpenAIGPTTokenizer (OpenAI GPT model)
-            - contains `gpt2`: GPT2Tokenizer (OpenAI GPT-2 model)
-            - contains `ctrl`: CTRLTokenizer (Salesforce CTRL model)
-            - contains `transfo-xl`: TransfoXLTokenizer (Transformer-XL model)
-            - contains `xlnet`: XLNetTokenizer (XLNet model)
-            - contains `xlm`: XLMTokenizer (XLM model)
+    The tokenizer class to instantiate is selected as the first pattern matching
+    in the `pretrained_model_name_or_path` string (in the following order):
+        - contains `camembert`: CamembertTokenizer (CamemBERT model)
+        - contains `distilbert`: DistilBertTokenizer (DistilBert model)
+        - contains `roberta`: RobertaTokenizer (RoBERTa model)
+        - contains `bert`: BertTokenizer (Bert model)
+        - contains `openai-gpt`: OpenAIGPTTokenizer (OpenAI GPT model)
+        - contains `gpt2`: GPT2Tokenizer (OpenAI GPT-2 model)
+        - contains `ctrl`: CTRLTokenizer (Salesforce CTRL model)
+        - contains `transfo-xl`: TransfoXLTokenizer (Transformer-XL model)
+        - contains `xlnet`: XLNetTokenizer (XLNet model)
+        - contains `xlm`: XLMTokenizer (XLM model)
 
-        This class cannot be instantiated using `__init__()` (throw an error).
+    This class cannot be instantiated using `__init__()` (throw an error).
     """
+
     def __init__(self):
-        raise EnvironmentError("AutoTokenizer is designed to be instantiated "
-            "using the `AutoTokenizer.from_pretrained(pretrained_model_name_or_path)` method.")
+        raise EnvironmentError(
+            "AutoTokenizer is designed to be instantiated "
+            "using the `AutoTokenizer.from_pretrained(pretrained_model_name_or_path)` method."
+        )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *inputs, **kwargs):
-        r""" Instantiate a one of the tokenizer classes of the library
+        r"""Instantiate a one of the tokenizer classes of the library
         from a pre-trained model vocabulary.
 
         The tokenizer class to instantiate is selected as the first pattern matching
@@ -104,26 +108,28 @@ class AutoTokenizer(object):
             tokenizer = AutoTokenizer.from_pretrained('./test/bert_saved_model/')  # E.g. tokenizer was saved using `save_pretrained('./test/saved_model/')`
 
         """
-        if 'distilbert' in pretrained_model_name_or_path:
+        if "distilbert" in pretrained_model_name_or_path:
             return DistilBertTokenizer.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
-        elif 'camembert' in pretrained_model_name_or_path:
+        elif "camembert" in pretrained_model_name_or_path:
             return CamembertTokenizer.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
-        elif 'roberta' in pretrained_model_name_or_path:
+        elif "roberta" in pretrained_model_name_or_path:
             return RobertaTokenizer.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
-        elif 'bert' in pretrained_model_name_or_path:
+        elif "bert" in pretrained_model_name_or_path:
             return BertTokenizer.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
-        elif 'openai-gpt' in pretrained_model_name_or_path:
+        elif "openai-gpt" in pretrained_model_name_or_path:
             return OpenAIGPTTokenizer.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
-        elif 'gpt2' in pretrained_model_name_or_path:
+        elif "gpt2" in pretrained_model_name_or_path:
             return GPT2Tokenizer.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
-        elif 'transfo-xl' in pretrained_model_name_or_path:
+        elif "transfo-xl" in pretrained_model_name_or_path:
             return TransfoXLTokenizer.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
-        elif 'xlnet' in pretrained_model_name_or_path:
+        elif "xlnet" in pretrained_model_name_or_path:
             return XLNetTokenizer.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
-        elif 'xlm' in pretrained_model_name_or_path:
+        elif "xlm" in pretrained_model_name_or_path:
             return XLMTokenizer.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
-        elif 'ctrl' in pretrained_model_name_or_path:
+        elif "ctrl" in pretrained_model_name_or_path:
             return CTRLTokenizer.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
-        raise ValueError("Unrecognized model identifier in {}. Should contains one of "
-                         "'bert', 'openai-gpt', 'gpt2', 'transfo-xl', 'xlnet', "
-                         "'xlm', 'roberta', 'camembert', 'ctrl'".format(pretrained_model_name_or_path))
+        raise ValueError(
+            "Unrecognized model identifier in {}. Should contains one of "
+            "'bert', 'openai-gpt', 'gpt2', 'transfo-xl', 'xlnet', "
+            "'xlm', 'roberta', 'camembert', 'ctrl'".format(pretrained_model_name_or_path)
+        )

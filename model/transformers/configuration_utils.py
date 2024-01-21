@@ -15,8 +15,7 @@
 # limitations under the License.
 """ Configuration base class and utilities."""
 
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import copy
 import json
@@ -24,46 +23,49 @@ import logging
 import os
 from io import open
 
-from .file_utils import cached_path, CONFIG_NAME
+from .file_utils import CONFIG_NAME, cached_path
 
 logger = logging.getLogger(__name__)
 
+
 class PretrainedConfig(object):
-    r""" Base class for all configuration classes.
-        Handles a few parameters common to all models' configurations as well as methods for loading/downloading/saving configurations.
+    r"""Base class for all configuration classes.
+    Handles a few parameters common to all models' configurations as well as methods for loading/downloading/saving configurations.
 
-        Note:
-            A configuration file can be loaded and saved to disk. Loading the configuration file and using this file to initialize a model does **not** load the model weights.
-            It only affects the model's configuration.
+    Note:
+        A configuration file can be loaded and saved to disk. Loading the configuration file and using this file to initialize a model does **not** load the model weights.
+        It only affects the model's configuration.
 
-        Class attributes (overridden by derived classes):
-            - ``pretrained_config_archive_map``: a python ``dict`` of with `short-cut-names` (string) as keys and `url` (string) of associated pretrained model configurations as values.
+    Class attributes (overridden by derived classes):
+        - ``pretrained_config_archive_map``: a python ``dict`` of with `short-cut-names` (string) as keys and `url` (string) of associated pretrained model configurations as values.
 
-        Parameters:
-            ``finetuning_task``: string, default `None`. Name of the task used to fine-tune the model. This can be used when converting from an original (TensorFlow or PyTorch) checkpoint.
-            ``num_labels``: integer, default `2`. Number of classes to use when the model is a classification model (sequences/tokens)
-            ``output_attentions``: boolean, default `False`. Should the model returns attentions weights.
-            ``output_hidden_states``: string, default `False`. Should the model returns all hidden-states.
-            ``torchscript``: string, default `False`. Is the model used with Torchscript.
+    Parameters:
+        ``finetuning_task``: string, default `None`. Name of the task used to fine-tune the model. This can be used when converting from an original (TensorFlow or PyTorch) checkpoint.
+        ``num_labels``: integer, default `2`. Number of classes to use when the model is a classification model (sequences/tokens)
+        ``output_attentions``: boolean, default `False`. Should the model returns attentions weights.
+        ``output_hidden_states``: string, default `False`. Should the model returns all hidden-states.
+        ``torchscript``: string, default `False`. Is the model used with Torchscript.
     """
     pretrained_config_archive_map = {}
 
     def __init__(self, **kwargs):
-        self.finetuning_task = kwargs.pop('finetuning_task', None)
-        self.num_labels = kwargs.pop('num_labels', 2)
-        self.output_attentions = kwargs.pop('output_attentions', False)
-        self.output_hidden_states = kwargs.pop('output_hidden_states', False)
-        self.output_past = kwargs.pop('output_past', True)  # Not used by all models
-        self.torchscript = kwargs.pop('torchscript', False)  # Only used by PyTorch models
-        self.use_bfloat16 = kwargs.pop('use_bfloat16', False)
-        self.pruned_heads = kwargs.pop('pruned_heads', {})
-        self.is_decoder = kwargs.pop('is_decoder', False)
+        self.finetuning_task = kwargs.pop("finetuning_task", None)
+        self.num_labels = kwargs.pop("num_labels", 2)
+        self.output_attentions = kwargs.pop("output_attentions", False)
+        self.output_hidden_states = kwargs.pop("output_hidden_states", False)
+        self.output_past = kwargs.pop("output_past", True)  # Not used by all models
+        self.torchscript = kwargs.pop("torchscript", False)  # Only used by PyTorch models
+        self.use_bfloat16 = kwargs.pop("use_bfloat16", False)
+        self.pruned_heads = kwargs.pop("pruned_heads", {})
+        self.is_decoder = kwargs.pop("is_decoder", False)
 
     def save_pretrained(self, save_directory):
-        """ Save a configuration object to the directory `save_directory`, so that it
-            can be re-loaded using the :func:`~transformers.PretrainedConfig.from_pretrained` class method.
+        """Save a configuration object to the directory `save_directory`, so that it
+        can be re-loaded using the :func:`~transformers.PretrainedConfig.from_pretrained` class method.
         """
-        assert os.path.isdir(save_directory), "Saving path should be a directory where the model and configuration can be saved"
+        assert os.path.isdir(
+            save_directory
+        ), "Saving path should be a directory where the model and configuration can be saved"
 
         # If we save using the predefined names, we can load using `from_pretrained`
         output_config_file = os.path.join(save_directory, CONFIG_NAME)
@@ -73,7 +75,7 @@ class PretrainedConfig(object):
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
-        r""" Instantiate a :class:`~transformers.PretrainedConfig` (or a derived class) from a pre-trained model configuration.
+        r"""Instantiate a :class:`~transformers.PretrainedConfig` (or a derived class) from a pre-trained model configuration.
 
         Parameters:
             pretrained_model_name_or_path: either:
@@ -118,10 +120,10 @@ class PretrainedConfig(object):
             assert unused_kwargs == {'foo': False}
 
         """
-        cache_dir = kwargs.pop('cache_dir', None)
-        force_download = kwargs.pop('force_download', False)
-        proxies = kwargs.pop('proxies', None)
-        return_unused_kwargs = kwargs.pop('return_unused_kwargs', False)
+        cache_dir = kwargs.pop("cache_dir", None)
+        force_download = kwargs.pop("force_download", False)
+        proxies = kwargs.pop("proxies", None)
+        return_unused_kwargs = kwargs.pop("return_unused_kwargs", False)
 
         if pretrained_model_name_or_path in cls.pretrained_config_archive_map:
             config_file = cls.pretrained_config_archive_map[pretrained_model_name_or_path]
@@ -131,30 +133,36 @@ class PretrainedConfig(object):
             config_file = pretrained_model_name_or_path
         # redirect to the cache, if necessary
         try:
-            resolved_config_file = cached_path(config_file, cache_dir=cache_dir, force_download=force_download, proxies=proxies)
+            resolved_config_file = cached_path(
+                config_file, cache_dir=cache_dir, force_download=force_download, proxies=proxies
+            )
         except EnvironmentError:
             if pretrained_model_name_or_path in cls.pretrained_config_archive_map:
                 msg = "Couldn't reach server at '{}' to download pretrained model configuration file.".format(
-                        config_file)
+                    config_file
+                )
             else:
-                msg = "Model name '{}' was not found in model name list ({}). " \
-                      "We assumed '{}' was a path or url to a configuration file named {} or " \
-                      "a directory containing such a file but couldn't find any such file at this path or url.".format(
+                msg = (
+                    "Model name '{}' was not found in model name list ({}). "
+                    "We assumed '{}' was a path or url to a configuration file named {} or "
+                    "a directory containing such a file but couldn't find any such file at this path or url.".format(
                         pretrained_model_name_or_path,
-                        ', '.join(cls.pretrained_config_archive_map.keys()),
-                        config_file, CONFIG_NAME)
+                        ", ".join(cls.pretrained_config_archive_map.keys()),
+                        config_file,
+                        CONFIG_NAME,
+                    )
+                )
             raise EnvironmentError(msg)
 
         if resolved_config_file == config_file:
             logger.info("loading configuration file {}".format(config_file))
         else:
-            logger.info("loading configuration file {} from cache at {}".format(
-                config_file, resolved_config_file))
+            logger.info("loading configuration file {} from cache at {}".format(config_file, resolved_config_file))
 
         # Load config
         config = cls.from_json_file(resolved_config_file)
 
-        if hasattr(config, 'pruned_heads'):
+        if hasattr(config, "pruned_heads"):
             config.pruned_heads = dict((int(key), value) for key, value in config.pruned_heads.items())
 
         # Update config with kwargs if needed
@@ -183,7 +191,7 @@ class PretrainedConfig(object):
     @classmethod
     def from_json_file(cls, json_file):
         """Constructs a `BertConfig` from a json file of parameters."""
-        with open(json_file, "r", encoding='utf-8') as reader:
+        with open(json_file, "r", encoding="utf-8") as reader:
             text = reader.read()
         return cls.from_dict(json.loads(text))
 
@@ -203,6 +211,6 @@ class PretrainedConfig(object):
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
 
     def to_json_file(self, json_file_path):
-        """ Save this instance to a json file."""
-        with open(json_file_path, "w", encoding='utf-8') as writer:
+        """Save this instance to a json file."""
+        with open(json_file_path, "w", encoding="utf-8") as writer:
             writer.write(self.to_json_string())
