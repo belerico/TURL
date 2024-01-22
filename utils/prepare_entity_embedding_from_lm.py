@@ -45,44 +45,45 @@ class TitleEmbeddings(nn.Module):
         return input_title_embeds
 
 
-model_dir = "../data/pre-trained_models/tiny-bert/2nd_General_TinyBERT_4L_312D"
-lm_checkpoint = torch.load(model_dir + "/pytorch_model.bin")
-bert_embeddings = lm_checkpoint["bert.embeddings.word_embeddings.weight"]
-model = TitleEmbeddings(30522, 312)
-pdb.set_trace()
-state_dict = model.state_dict()
-state_dict["word_embeddings.weight"] = bert_embeddings
-model.load_state_dict(state_dict)
-tokenizer = BertTokenizer.from_pretrained(model_dir)
-data_dir = "../data/wikitables_v2"
-entity_vocab = load_entity_vocab(data_dir)
-i = 0
-batch_size = 1000
-entity_embeddings = []
-with tqdm(total=len(entity_vocab)) as pbar:
-    while i < len(entity_vocab):
-        if i + batch_size < len(entity_vocab):
-            _, entity_titles = zip(*entity_vocab[i : i + batch_size])
-        else:
-            _, entity_titles = zip(*entity_vocab[i:])
-        entity_titles_tokenized = [
-            tokenizer.encode(" ".join(x.lower().split("_")), add_special_tokens=False) for x in entity_titles
-        ]
-        max_length = max([len(x) for x in entity_titles_tokenized])
-        entity_titles_padded = [x + [0] * (max_length - len(x)) for x in entity_titles_tokenized]
-        entity_titles_padded = torch.LongTensor(entity_titles_padded)
-        entity_embedding = model(entity_titles_padded)
-        entity_embeddings.extend(entity_embedding.tolist())
-        pbar.update(batch_size)
-        i += batch_size
-assert len(entity_embeddings) == len(entity_vocab)
-entity_vocab_with_embed = {}
-for i, (x, _) in enumerate(entity_vocab):
-    entity_vocab_with_embed[x] = entity_embeddings[i]
-entity_vocab_with_embed["[PAD]"] = bert_embeddings[tokenizer.pad_token_id].tolist()
-entity_vocab_with_embed["[ENT_MASK]"] = bert_embeddings[tokenizer.mask_token_id].tolist()
-entity_vocab_with_embed["[PG_ENT_MASK]"] = bert_embeddings[tokenizer.mask_token_id].tolist()
-entity_vocab_with_embed["[CORE_ENT_MASK]"] = bert_embeddings[tokenizer.mask_token_id].tolist()
+if __name__ == "__main__":
+    model_dir = "../data/pre-trained_models/tiny-bert/2nd_General_TinyBERT_4L_312D"
+    lm_checkpoint = torch.load(model_dir + "/pytorch_model.bin")
+    bert_embeddings = lm_checkpoint["bert.embeddings.word_embeddings.weight"]
+    model = TitleEmbeddings(30522, 312)
+    pdb.set_trace()
+    state_dict = model.state_dict()
+    state_dict["word_embeddings.weight"] = bert_embeddings
+    model.load_state_dict(state_dict)
+    tokenizer = BertTokenizer.from_pretrained(model_dir)
+    data_dir = "../data/wikitables_v2"
+    entity_vocab = load_entity_vocab(data_dir)
+    i = 0
+    batch_size = 1000
+    entity_embeddings = []
+    with tqdm(total=len(entity_vocab)) as pbar:
+        while i < len(entity_vocab):
+            if i + batch_size < len(entity_vocab):
+                _, entity_titles = zip(*entity_vocab[i : i + batch_size])
+            else:
+                _, entity_titles = zip(*entity_vocab[i:])
+            entity_titles_tokenized = [
+                tokenizer.encode(" ".join(x.lower().split("_")), add_special_tokens=False) for x in entity_titles
+            ]
+            max_length = max([len(x) for x in entity_titles_tokenized])
+            entity_titles_padded = [x + [0] * (max_length - len(x)) for x in entity_titles_tokenized]
+            entity_titles_padded = torch.LongTensor(entity_titles_padded)
+            entity_embedding = model(entity_titles_padded)
+            entity_embeddings.extend(entity_embedding.tolist())
+            pbar.update(batch_size)
+            i += batch_size
+    assert len(entity_embeddings) == len(entity_vocab)
+    entity_vocab_with_embed = {}
+    for i, (x, _) in enumerate(entity_vocab):
+        entity_vocab_with_embed[x] = entity_embeddings[i]
+    entity_vocab_with_embed["[PAD]"] = bert_embeddings[tokenizer.pad_token_id].tolist()
+    entity_vocab_with_embed["[ENT_MASK]"] = bert_embeddings[tokenizer.mask_token_id].tolist()
+    entity_vocab_with_embed["[PG_ENT_MASK]"] = bert_embeddings[tokenizer.mask_token_id].tolist()
+    entity_vocab_with_embed["[CORE_ENT_MASK]"] = bert_embeddings[tokenizer.mask_token_id].tolist()
 
-with open(os.path.join(data_dir, "entity_embedding_tinybert_312.pkl"), "wb") as f:
-    pickle.dump(entity_vocab_with_embed, f)
+    with open(os.path.join(data_dir, "entity_embedding_tinybert_312.pkl"), "wb") as f:
+        pickle.dump(entity_vocab_with_embed, f)
