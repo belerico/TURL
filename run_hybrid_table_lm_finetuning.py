@@ -34,6 +34,8 @@ import torch
 from torch.utils.data import RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
+from data_loader.data_loaders import EntityTableLoader, WikiEntityTableDataset
+
 try:
     from torch.utils.tensorboard import SummaryWriter
 except:
