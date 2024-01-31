@@ -6,6 +6,7 @@ import random
 from functools import partial
 from multiprocessing import Pool
 
+import jsonlines as jsonl
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -45,7 +46,17 @@ RESERVED_ENT_VOCAB = {
 RESERVED_ENT_VOCAB_NUM = len(RESERVED_ENT_VOCAB)
 
 
-def process_single_hybrid_table(input_table, config):
+def process_single_hybrid_table(
+    input_table,
+    tokenizer: BertTokenizer,
+    max_title_length,
+    max_header_length,
+    max_cell_length,
+    max_input_tok,
+    max_input_ent,
+    entity_wikid2id,
+    src="train",
+):
     (
         table_id,
         subject,
@@ -61,14 +72,14 @@ def process_single_hybrid_table(input_table, config):
         entities_text,
         entity_cand,
     ) = input_table
-    tokenized_pgTitle = config.tokenizer.encode(pgTitle, max_length=config.max_title_length, add_special_tokens=False)
-    tokenized_meta = tokenized_pgTitle + config.tokenizer.encode(
-        secTitle, max_length=config.max_title_length, add_special_tokens=False
+    tokenized_pgTitle = tokenizer.encode(pgTitle, max_length=max_title_length, add_special_tokens=False)
+    tokenized_meta = tokenized_pgTitle + tokenizer.encode(
+        secTitle, max_length=max_title_length, add_special_tokens=False
     )
     if caption != secTitle:
-        tokenized_meta += config.tokenizer.encode(caption, max_length=config.max_title_length, add_special_tokens=False)
+        tokenized_meta += tokenizer.encode(caption, max_length=max_title_length, add_special_tokens=False)
     tokenized_headers = [
-        config.tokenizer.encode(z, max_length=config.max_header_length, add_special_tokens=False) for _, z in headers
+        tokenizer.encode(z, max_length=max_header_length, add_special_tokens=False) for _, z in headers
     ]
     input_tok = []
     input_tok_pos = []
@@ -91,7 +102,7 @@ def process_single_hybrid_table(input_table, config):
         input_ent.append(entity)
         if len(entities_text[e_i]) != 0:
             input_ent_text.append(
-                config.tokenizer.encode(entities_text[e_i], max_length=config.max_cell_length, add_special_tokens=False)
+                tokenizer.encode(entities_text[e_i], max_length=max_cell_length, add_special_tokens=False)
             )
         else:
             input_ent_text.append([])
@@ -105,14 +116,22 @@ def process_single_hybrid_table(input_table, config):
             row_en_map[index[0]] = [e_i]
         else:
             row_en_map[index[0]].append(e_i)
-    len(input_tok) + len(input_ent)
-    assert len(input_tok) < config.max_input_tok
-    assert len(input_ent) < config.max_input_ent
+
+    # What does `input_tok` represents?
+    # `input_tok` is a list of token ids, which is the concatenation of the `tokenized_meta` and headers,
+    # where the `tokenized_meta` is the concatenation of pgTitle, secTitle, and caption.
+    # What does `input_ent` represents?
+    # `input_ent` is a list of entity ids
+    # What does `input_ent_text` represents?
+    # `input_ent_text` is a list of list of token ids, where each list of token ids represents the tokenized entity text.
+
+    assert len(input_tok) < max_input_tok
+    assert len(input_ent) < max_input_ent
     meta_and_headers_length = tokenized_meta_length + sum(tokenized_headers_length)
     assert len(input_tok) == meta_and_headers_length
     # create input mask
     tok_tok_mask = np.ones([len(input_tok), len(input_tok)], dtype=int)
-    if config.src == "train":
+    if src == "train":
         meta_ent_mask = np.ones([tokenized_meta_length, len(input_ent)], dtype=int)
     else:
         meta_ent_mask = np.zeros([tokenized_meta_length, len(input_ent)], dtype=int)
@@ -125,7 +144,7 @@ def process_single_hybrid_table(input_table, config):
     for e_i, (index, _) in enumerate(entities):
         header_ent_mask[header_span[index[1]][0] : header_span[index[1]][1], e_i] = 1
     ent_header_mask = np.transpose(header_ent_mask)
-    if config.src != "train":
+    if src != "train":
         header_ent_mask = np.zeros([sum(tokenized_headers_length), len(input_ent)], dtype=int)
 
     input_tok_mask = [tok_tok_mask, np.concatenate([meta_ent_mask, header_ent_mask], axis=0)]
@@ -135,19 +154,19 @@ def process_single_hybrid_table(input_table, config):
     for _, e_is in column_en_map.items():
         for e_i_1 in e_is:
             for e_i_2 in e_is:
-                if config.src == "train" or (e_i_2 < e_i_1 and input_ent[e_i_2] >= len(RESERVED_ENT_VOCAB)):
+                if src == "train" or (e_i_2 < e_i_1 and input_ent[e_i_2] >= len(RESERVED_ENT_VOCAB)):
                     ent_ent_mask[e_i_1, e_i_2] = 1
 
     for _, e_is in row_en_map.items():
         for e_i_1 in e_is:
             for e_i_2 in e_is:
-                if config.src == "train" or (e_i_2 < e_i_1 and input_ent[e_i_2] >= len(RESERVED_ENT_VOCAB)):
+                if src == "train" or (e_i_2 < e_i_1 and input_ent[e_i_2] >= len(RESERVED_ENT_VOCAB)):
                     ent_ent_mask[e_i_1, e_i_2] = 1
     input_ent_mask = [np.concatenate([ent_meta_mask, ent_header_mask], axis=1), ent_ent_mask]
 
     # prepend [CORE_ENT_MASK] to input, input_ent[1] = [CORE_ENT_MASK]
     input_tok_mask[1] = np.concatenate([np.zeros([len(input_tok), 1], dtype=int), input_tok_mask[1]], axis=1)
-    input_ent = [config.entity_wikid2id["[CORE_ENT_MASK]"]] + input_ent
+    input_ent = [entity_wikid2id["[CORE_ENT_MASK]"]] + input_ent
     input_ent_text = [[]] + input_ent_text
     input_ent_type = [3] + input_ent_type
     # prepend pgEnt to input_ent, input_ent[0] = pgEnt
@@ -156,7 +175,7 @@ def process_single_hybrid_table(input_table, config):
     else:
         input_tok_mask[1] = np.concatenate([np.zeros([len(input_tok), 1], dtype=int), input_tok_mask[1]], axis=1)
     input_ent = [pgEnt if pgEnt != -1 else 0] + input_ent
-    input_ent_text = [tokenized_pgTitle[: config.max_cell_length]] + input_ent_text
+    input_ent_text = [tokenized_pgTitle[:max_cell_length]] + input_ent_text
     input_ent_type = [2] + input_ent_type
 
     new_input_ent_mask = [
@@ -194,7 +213,7 @@ def process_single_hybrid_table(input_table, config):
         # pdb.set_trace()
         raise Exception
 
-    if config.src == "train":
+    if src == "train":
         input_ent_local_id = [find_id(pgEnt, all_entity_set) if pgEnt != -1 else 0, 0] + [
             find_id(e, all_entity_set) for e in input_ent[2:]
         ]
@@ -336,11 +355,11 @@ def process_single_hybrid_table_CER(input_table, config):
 class WikiHybridTableDataset(Dataset):
     def _preprocess(self, data_dir):
         if self.mode == 0:
-            preprocessed_filename = os.path.join(data_dir, "procressed_hybrid", self.src)
+            preprocessed_filename = os.path.join(data_dir, "processed_hybrid", self.src)
         elif self.mode == 1:
-            preprocessed_filename = os.path.join(data_dir, "procressed_hybrid_CER", self.src)
+            preprocessed_filename = os.path.join(data_dir, "processed_hybrid_CER", self.src)
         elif self.mode == 2:
-            preprocessed_filename = os.path.join(data_dir, "procressed_hybrid_all", self.src)
+            preprocessed_filename = os.path.join(data_dir, "processed_hybrid_all", self.src)
         else:
             raise Exception
         preprocessed_filename += ".pickle"
@@ -352,16 +371,25 @@ class WikiHybridTableDataset(Dataset):
             print("try creating preprocessed data in %s" % preprocessed_filename)
             try:
                 if self.mode == 0:
-                    os.mkdir(os.path.join(data_dir, "procressed_hybrid"))
+                    os.mkdir(os.path.join(data_dir, "processed_hybrid"))
                 elif self.mode == 1:
-                    os.mkdir(os.path.join(data_dir, "procressed_hybrid_CER"))
+                    os.mkdir(os.path.join(data_dir, "processed_hybrid_CER"))
                 elif self.mode == 2:
-                    os.mkdir(os.path.join(data_dir, "procressed_hybrid_all"))
+                    os.mkdir(os.path.join(data_dir, "processed_hybrid_all"))
                 else:
                     raise Exception
             except FileExistsError:
                 pass
-            origin_data = open(os.path.join(data_dir, self.src + "_tables.jsonl"), "r")
+            origin_data_file = os.path.join(data_dir, self.src + "_tables.jsonl")
+            origin_data = []
+            if self.dry_run:
+                with jsonl.open(origin_data_file) as reader:
+                    for idx, l in enumerate(reader):
+                        origin_data.append(json.dumps(l))
+                        if idx > 2:
+                            break
+            else:
+                origin_data = open(origin_data_file, "r")
             entity_candidate_file = os.path.join(data_dir, self.src + ".entity_candidate.pkl")
             if os.path.exists(entity_candidate_file):
                 with open(entity_candidate_file, "rb") as f:
@@ -428,7 +456,9 @@ class WikiHybridTableDataset(Dataset):
                 if len(tmp_entities) == 0:
                     continue
                 if self.mode == 0:
-                    if i == 0 or not (entity_cells[i] == entity_cells[:i]).all(axis=1).any():
+                    if (
+                        i == 0 or not (entity_cells[i] == entity_cells[:i]).all(axis=1).any()
+                    ):  # If the row is different from all the previous rows
                         has_core = True if any([z[0][1] == subject for z in tmp_entities]) else False
                         if has_core or self.src == "train":
                             for (index, entity), entity_text in zip(tmp_entities, tmp_entities_text):
@@ -456,14 +486,15 @@ class WikiHybridTableDataset(Dataset):
                     if tmp_entity_num >= self.max_cell:
                         split.append(len(entities))
                         tmp_entity_num = 0
-                #     pdb.set_trace()
             if split[-1] != len(entities):
                 split.append(len(entities))
-            if len(core_entities) < 5:
-                if self.mode != 2:
-                    if self.src != "train" or len(core_entities) == 0 or (self.mode == 1 and len(core_entities) < 3):
-                        table_removed += 1
-                        continue
+            if (
+                len(core_entities) < 5
+                and self.mode != 2
+                and (self.src != "train" or len(core_entities) == 0 or (self.mode == 1 and len(core_entities) < 3))
+            ):
+                table_removed += 1
+                continue
             if split[-2] != 0 and split[-1] - split[-2] < 5:
                 split[-2] = split[-1]
                 split = split[:-1]
@@ -492,11 +523,25 @@ class WikiHybridTableDataset(Dataset):
             % (origin_table_num, actual_table_num, table_removed)
         )
 
-        pool = Pool(processes=4)
+        pool = Pool(processes=2)
         if self.mode == 0:
             processed_data = list(
                 tqdm(
-                    pool.imap(partial(process_single_hybrid_table, config=self), actual_tables, chunksize=2000),
+                    pool.imap(
+                        partial(
+                            process_single_hybrid_table,
+                            tokenizer=self.tokenizer,
+                            max_title_length=self.max_title_length,
+                            max_header_length=self.max_header_length,
+                            max_cell_length=self.max_cell_length,
+                            max_input_tok=self.max_input_tok,
+                            max_input_ent=self.max_input_ent,
+                            entity_wikid2id=self.entity_wikid2id,
+                            src=self.src,
+                        ),
+                        actual_tables,
+                        chunksize=2000,
+                    ),
                     total=len(actual_tables),
                 )
             )
@@ -526,15 +571,16 @@ class WikiHybridTableDataset(Dataset):
         max_input_tok=350,
         max_input_ent=150,
         src="train",
-        max_length=[50, 10, 10],
+        max_length=[50, 10, 10],  # Title length, header length, cell length
         force_new=False,
         tokenizer=None,
         mode=0,
+        dry_run: bool = False,
     ):
         if tokenizer is not None:
             self.tokenizer = tokenizer
         else:
-            self.tokenizer = BertTokenizer.from_pretrained("data/pre-trained_models/bert-base-uncased")
+            self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")  # Downlaod from the HUB
         self.src = src
         self.mode = mode  # {0:pretrain,1:core entity retrieval,2:cell filling}
         self.max_cell = float(max_cell)
@@ -546,8 +592,8 @@ class WikiHybridTableDataset(Dataset):
         self.max_input_ent = max_input_ent
         self.entity_vocab = entity_vocab
         self.entity_wikid2id = {self.entity_vocab[x]["wiki_id"]: x for x in self.entity_vocab}
+        self.dry_run = dry_run
         self.data = self._preprocess(data_dir)
-        # pdb.set_trace()
 
     def __len__(self):
         return len(self.data)

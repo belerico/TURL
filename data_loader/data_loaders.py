@@ -11,8 +11,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-
-from model.transformers import BertTokenizer
+from transformers import BertTokenizer
 
 
 def process_single_table(input_table, config):

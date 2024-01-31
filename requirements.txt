@@ -1,0 +1,7 @@
+torch>=2.0
+lightning>=2.0
+tqdm
+tensorboard
+transformers
+pandas
+boto3

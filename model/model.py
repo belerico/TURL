@@ -36,7 +36,6 @@ from model.transformers.modeling_bert import (
     BertPooler,
     BertPredictionHeadTransform,
     BertPreTrainedModel,
-    unicode,
 )
 
 logger = logging.getLogger(__name__)

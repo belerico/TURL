@@ -42,13 +42,13 @@ except:
     from tensorboardX import SummaryWriter
 
 from tqdm import tqdm, trange
+from transformers import WEIGHTS_NAME, BertTokenizer, get_linear_schedule_with_warmup
 
 from data_loader.hybrid_data_loaders import *
 from model.configuration import TableConfig
 from model.metric import *
 from model.model import HybridTableMaskedLM
 from model.optim import DenseSparseAdam
-from model.transformers import WEIGHTS_NAME, BertTokenizer, get_linear_schedule_with_warmup
 from utils.util import *
 
 logger = logging.getLogger(__name__)
@@ -337,7 +337,7 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
     if args.local_rank in [-1, 0]:
         tb_writer.close()
 
-    return global_step, tr_loss / global_step
+    return global_step, tr_loss / max(global_step, 1)
 
 
 def evaluate(args, config, eval_dataset, model, prefix="", sample_distribution=None):
@@ -925,7 +925,7 @@ def main():
     # pdb.set_trace()
     if args.do_train:
         if args.resume == "":
-            lm_model_dir = "data/pre-trained_models/tiny-bert/2nd_General_TinyBERT_4L_312D"
+            lm_model_dir = "tiny-bert"
             lm_checkpoint = torch.load(lm_model_dir + "/pytorch_model.bin")
             model.load_pretrained(lm_checkpoint)
             origin_ent_embeddings = model.table.embeddings.ent_embeddings.weight.data.numpy()
