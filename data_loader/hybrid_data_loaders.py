@@ -523,6 +523,7 @@ class WikiHybridTableDataset(Dataset):
             % (origin_table_num, actual_table_num, table_removed)
         )
 
+        # TODO: increase the number of processes for pre-processing
         pool = Pool(processes=2)
         if self.mode == 0:
             processed_data = list(
