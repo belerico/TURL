@@ -395,7 +395,7 @@ class WikiHybridTableDataset(Dataset):
                 with open(entity_candidate_file, "rb") as f:
                     entity_candidate = pickle.load(f)
             else:
-                entity_candidate = None
+                raise FileNotFoundError(self.src + ".entity_candidate.pkl not found")
         print("Pre-processing data...")
         origin_table_num = 0
         actual_tables = []
@@ -524,7 +524,7 @@ class WikiHybridTableDataset(Dataset):
         )
 
         # TODO: increase the number of processes for pre-processing
-        pool = Pool(processes=2)
+        pool = Pool(processes=16)
         if self.mode == 0:
             processed_data = list(
                 tqdm(

@@ -20,6 +20,9 @@ lib64/
 parts/
 sdist/
 var/
+json_data/
+ent_embeddings/
+tiny-bert/
 wheels/
 *.egg-info/
 .installed.cfg
