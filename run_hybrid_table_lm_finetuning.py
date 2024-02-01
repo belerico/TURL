@@ -31,19 +31,13 @@ import shutil
 
 import numpy as np
 import torch
+from lightning.fabric.loggers import TensorBoardLogger
 from torch.utils.data import RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
-
-from data_loader.data_loaders import EntityTableLoader, WikiEntityTableDataset
-
-try:
-    from torch.utils.tensorboard import SummaryWriter
-except:
-    from tensorboardX import SummaryWriter
-
 from tqdm import tqdm, trange
 from transformers import WEIGHTS_NAME, BertTokenizer, get_linear_schedule_with_warmup
 
+from data_loader.data_loaders import EntityTableLoader, WikiEntityTableDataset
 from data_loader.hybrid_data_loaders import *
 from model.configuration import TableConfig
 from model.metric import *
@@ -67,14 +61,14 @@ def set_seed(args):
         torch.cuda.manual_seed_all(args.seed)
 
 
-def _rotate_checkpoints(args, checkpoint_prefix, use_mtime=False):
+def _rotate_checkpoints(args, checkpoint_prefix, use_mtime=False, log_dir: str=None):
     if not args.save_total_limit:
         return
     if args.save_total_limit <= 0:
         return
 
     # Check if we should delete older checkpoint(s)
-    glob_checkpoints = glob.glob(os.path.join(args.output_dir, "{}-*".format(checkpoint_prefix)))
+    glob_checkpoints = glob.glob(os.path.join(args.output_dir if log_dir is None else log_dir, "{}-*".format(checkpoint_prefix)))
     if len(glob_checkpoints) <= args.save_total_limit:
         return
 
@@ -99,7 +93,8 @@ def _rotate_checkpoints(args, checkpoint_prefix, use_mtime=False):
 def train(args, config, train_dataset, model, eval_dataset=None, sample_distribution=None):
     """Train the model"""
     if args.local_rank in [-1, 0]:
-        tb_writer = SummaryWriter(os.path.join(args.output_dir, "logs"))
+        tb_logger = TensorBoardLogger(os.path.join(args.output_dir, "logs"), name="turl")
+        tb_logger.log_hyperparams(args)
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
@@ -220,8 +215,12 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
                 exclusive_ent_mask = exclusive_ent_mask.to(args.device)
                 if args.exclusive_ent == 2:  # mask only core entity
                     exclusive_ent_mask += (~core_entity_mask[:, :, None]).long() * 1000
-            
-            with torch.autocast(device_type="cuda" if str(args.device).startswith("cuda") else "cpu", dtype=torch.float16, enabled=args.fp16):         
+
+            with torch.autocast(
+                device_type="cuda" if str(args.device).startswith("cuda") else "cpu",
+                dtype=torch.float16,
+                enabled=args.fp16,
+            ):
                 tok_outputs, ent_outputs = model(
                     input_tok,
                     input_tok_type,
@@ -276,7 +275,7 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
 
                 # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                
+
                 # Optimizer update
                 scaler.step(optimizer)
                 scaler.update()
@@ -293,27 +292,24 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
                     ):  # Only evaluate when single GPU otherwise metrics may not average well
                         results = evaluate(args, config, eval_dataset, model, sample_distribution=None)
                         for key, value in results.items():
-                            tb_writer.add_scalar("eval_{}".format(key), value, global_step)
-                    tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
-                    tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
+                            tb_logger.log_metrics({"eval/{}".format(key): value}, global_step)
                     logging_loss = tr_loss
-                    tb_writer.add_scalar("tok_loss", (tok_tr_loss - tok_logging_loss) / args.logging_steps, global_step)
                     tok_logging_loss = tok_tr_loss
-                    # tb_writer.add_scalar('tok_acc', (tok_tr_acc - tok_logging_acc)/args.logging_steps, global_step)
-                    # tok_logging_acc = tok_tr_acc
-                    # tb_writer.add_scalar('tok_mr', (tok_tr_mr - tok_logging_mr)/args.logging_steps, global_step)
-                    # tok_logging_mr = tok_tr_mr
-                    tb_writer.add_scalar("ent_loss", (ent_tr_loss - ent_logging_loss) / args.logging_steps, global_step)
                     ent_logging_loss = ent_tr_loss
-                    # tb_writer.add_scalar('ent_acc', (ent_tr_acc - ent_logging_acc)/args.logging_steps, global_step)
-                    # ent_logging_acc = ent_tr_acc
-                    # tb_writer.add_scalar('ent_mr', (ent_tr_mr - ent_logging_mr)/args.logging_steps, global_step)
-                    # ent_logging_mr = ent_tr_mr
+                    tb_logger.log_metrics(
+                        {
+                            "train/lr": scheduler.get_lr()[0],
+                            "train/loss": (tr_loss - logging_loss) / args.logging_steps,
+                            "train/tok_loss": (tok_tr_loss - tok_logging_loss) / args.logging_steps,
+                            "train/ent_loss": (ent_tr_loss - ent_logging_loss) / args.logging_steps,
+                        },
+                        global_step,
+                    )
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                     checkpoint_prefix = "checkpoint"
                     # Save model checkpoint
-                    output_dir = os.path.join(args.output_dir, "{}-{}".format(checkpoint_prefix, global_step))
+                    output_dir = os.path.join(tb_logger.log_dir, "checkpoints", "{}-{}".format(checkpoint_prefix, global_step))
                     if not os.path.exists(output_dir):
                         os.makedirs(output_dir)
                     model_to_save = (
@@ -330,7 +326,7 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
                     torch.save(state_for_resume, os.path.join(output_dir, "state_for_resume.bin"))
                     logger.info("Saving model checkpoint to %s", output_dir)
 
-                    _rotate_checkpoints(args, checkpoint_prefix)
+                    _rotate_checkpoints(args, checkpoint_prefix, log_dir=tb_logger.log_dir)
 
             if args.max_steps > 0 and global_step > args.max_steps:
                 epoch_iterator.close()
@@ -340,7 +336,7 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
             break
 
     if args.local_rank in [-1, 0]:
-        tb_writer.close()
+        tb_logger.finalize()
 
     return global_step, tr_loss / max(global_step, 1)
 
