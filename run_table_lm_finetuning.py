@@ -44,13 +44,13 @@ from tqdm import tqdm, trange
 from data_loader.data_loaders import *
 from model.configuration import TableConfig
 from model.metric import *
-from model.model import TableCER, TableMaskedLM
-from model.transformers import WEIGHTS_NAME, AdamW, BertTokenizer, get_linear_schedule_with_warmup
+from model.model import TableMaskedLM
+from transformers import WEIGHTS_NAME, BertTokenizer, get_linear_schedule_with_warmup
 from utils.util import *
 
 logger = logging.getLogger(__name__)
 
-MODEL_CLASSES = {"table": (TableConfig, TableMaskedLM, BertTokenizer), "CER": (TableConfig, TableCER, BertTokenizer)}
+MODEL_CLASSES = {"table": (TableConfig, TableMaskedLM, BertTokenizer)}
 
 
 def set_seed(args):
@@ -315,7 +315,7 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
     if args.local_rank in [-1, 0]:
         tb_writer.close()
 
-    return global_step, tr_loss / global_step
+    return global_step, tr_loss / max(global_step, 1.0)
 
 
 def evaluate(args, config, eval_dataset, model, prefix="", sample_distribution=None):
@@ -863,6 +863,9 @@ def main():
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training download model & vocab
 
+    if str(args.model_type).lower() == "cer":
+        raise ValueError("CER is not supported!")
+
     config_class, model_class, _ = MODEL_CLASSES[args.model_type]
     config = config_class.from_pretrained(
         args.config_name if args.config_name else args.model_name_or_path,
@@ -887,9 +890,10 @@ def main():
         sample_distribution = None
     entity_wikid2id = {entity_vocab[x]["wiki_id"]: x for x in entity_vocab}
 
+    assert config.ent_vocab_size == len(entity_vocab)
     model = model_class(config, is_simple=True)
     if args.do_train:
-        lm_model_dir = "data/pre-trained_models/tiny-bert/2nd_General_TinyBERT_4L_312D"
+        lm_model_dir = "/teamspace/studios/this_studio/TURL/tiny-bert"
         lm_checkpoint = torch.load(lm_model_dir + "/pytorch_model.bin")
         model.load_pretrained(lm_checkpoint)
         origin_ent_embeddings = model.table.embeddings.ent_embeddings.weight.data.numpy()

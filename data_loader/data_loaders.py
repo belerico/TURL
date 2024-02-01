@@ -745,7 +745,7 @@ class WikiEntityTableDataset(Dataset):
         if tokenizer is not None:
             self.tokenizer = tokenizer
         else:
-            self.tokenizer = BertTokenizer.from_pretrained("data/pre-trained_models/bert-base-uncased")
+            self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.src = src
         self.mode = mode  # {0:pretrain,1:core entity retrieval,2:cell filling}
         self.max_cell = float(max_cell)

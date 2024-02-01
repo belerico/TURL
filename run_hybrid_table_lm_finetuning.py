@@ -928,13 +928,14 @@ def main():
             lm_model_dir = "tiny-bert"
             lm_checkpoint = torch.load(lm_model_dir + "/pytorch_model.bin")
             model.load_pretrained(lm_checkpoint)
-            origin_ent_embeddings = model.table.embeddings.ent_embeddings.weight.data.numpy()
-            new_ent_embeddings = create_ent_embedding(args.data_dir, entity_wikid2id, origin_ent_embeddings)
-            new_ent_embeddings_file = Path("ent_embeddings/new_ent_embeddings.bin").mkdir(parents=True, exist_ok=True)
-            if not os.path.exists(new_ent_embeddings_file):
-                torch.save(new_ent_embeddings, str(new_ent_embeddings_file))
+            new_ent_embeddings_dir = Path("./ent_embeddings")
+            new_ent_embeddings_dir.mkdir(parents=True, exist_ok=True)
+            if not os.path.exists(new_ent_embeddings_dir / "new_ent_embeddings.bin"):
+                origin_ent_embeddings = model.table.embeddings.ent_embeddings.weight.data.numpy()
+                new_ent_embeddings = create_ent_embedding(args.data_dir, entity_wikid2id, origin_ent_embeddings)
+                torch.save(new_ent_embeddings, str(new_ent_embeddings_dir / "new_ent_embeddings.bin"))
             else:
-                torch.load(new_ent_embeddings_file, map_location="cpu")
+                new_ent_embeddings = torch.load(new_ent_embeddings_dir / "new_ent_embeddings.bin", map_location="cpu")
             model.table.embeddings.ent_embeddings.weight.data = torch.FloatTensor(new_ent_embeddings)
         else:
             checkpoint = torch.load(args.resume)

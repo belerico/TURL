@@ -9,6 +9,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from tqdm import tqdm
+
 
 def ensure_dir(dirname):
     dirname = Path(dirname)
@@ -61,8 +63,10 @@ class MetricTracker:
 def create_ent_embedding(data_dir, ent_vocab, origin_embed):
     with open(os.path.join(data_dir, "entity_embedding_tinybert_312.pkl"), "rb") as f:
         ent_embed = pickle.load(f)
-    for wiki_id in ent_vocab:
-        origin_embed[ent_vocab[wiki_id]] = ent_embed[str(wiki_id)]
+    for wiki_id in tqdm(ent_vocab):
+        ent_id = ent_vocab[wiki_id]
+        ent_embedding = ent_embed[str(wiki_id)]
+        origin_embed[ent_id] = ent_embedding
     return origin_embed
 
 
