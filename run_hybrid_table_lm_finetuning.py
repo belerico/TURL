@@ -138,21 +138,12 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
     )
-    if args.fp16:
-        try:
-            from apex import amp
-        except ImportError:
-            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
-
-    # multi-gpu training (should be after apex fp16 initialization)
-    if args.n_gpu > 1:
-        model = torch.nn.DataParallel(model)
+    scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
 
     # Distributed training (should be after apex fp16 initialization)
     if args.local_rank != -1:
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True
+            model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=False
         )
 
     # Train!
@@ -175,7 +166,7 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
     # tok_tr_acc, tok_logging_acc, ent_tr_acc, ent_logging_acc = 0.0, 0.0, 0.0, 0.0
     # tok_tr_mr, tok_logging_mr, ent_tr_mr, ent_logging_mr = 0.0, 0.0, 0.0, 0.0
     # model.module.resize_token_embeddings(len(tokenizer))
-    model.zero_grad()
+    model.zero_grad(set_to_none=True)
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0])
     set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
     for _ in train_iterator:
@@ -221,34 +212,35 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
                 exclusive_ent_mask = exclusive_ent_mask.to(args.device)
                 if args.exclusive_ent == 2:  # mask only core entity
                     exclusive_ent_mask += (~core_entity_mask[:, :, None]).long() * 1000
-            # pdb.set_trace()
-            tok_outputs, ent_outputs = model(
-                input_tok,
-                input_tok_type,
-                input_tok_pos,
-                input_tok_mask,
-                input_ent_text,
-                input_ent_text_length,
-                input_ent_mask_type,
-                input_ent,
-                input_ent_type,
-                input_ent_mask,
-                candidate_entity_set,
-                input_tok_labels,
-                input_ent_labels,
-                exclusive_ent_mask,
-            )
-            tok_loss = tok_outputs[0]  # model outputs are always tuple in transformers (see doc)
-            ent_loss = ent_outputs[0]
+            
+            with torch.autocast(device_type="cuda" if str(args.device).startswith("cuda") else "cpu", dtype=torch.float16, enabled=args.fp16):         
+                tok_outputs, ent_outputs = model(
+                    input_tok,
+                    input_tok_type,
+                    input_tok_pos,
+                    input_tok_mask,
+                    input_ent_text,
+                    input_ent_text_length,
+                    input_ent_mask_type,
+                    input_ent,
+                    input_ent_type,
+                    input_ent_mask,
+                    candidate_entity_set,
+                    input_tok_labels,
+                    input_ent_labels,
+                    exclusive_ent_mask,
+                )
+                tok_loss = tok_outputs[0]  # model outputs are always tuple in transformers (see doc)
+                ent_loss = ent_outputs[0]
 
-            # tok_prediction_scores = tok_outputs[1]
-            # ent_prediction_scores = ent_outputs[1]
-            # tok_acc = accuracy(tok_prediction_scores.view(-1, config.vocab_size), input_tok_labels.view(-1),ignore_index=-1)
-            # tok_mr = mean_rank(tok_prediction_scores.view(-1, config.vocab_size), input_tok_labels.view(-1))
-            # ent_acc = accuracy(ent_prediction_scores.view(-1, config.max_entity_candidate), input_ent_labels.view(-1),ignore_index=-1)
-            # ent_mr = mean_rank(ent_prediction_scores.view(-1, config.max_entity_candidate), input_ent_labels.view(-1))
+                # tok_prediction_scores = tok_outputs[1]
+                # ent_prediction_scores = ent_outputs[1]
+                # tok_acc = accuracy(tok_prediction_scores.view(-1, config.vocab_size), input_tok_labels.view(-1),ignore_index=-1)
+                # tok_mr = mean_rank(tok_prediction_scores.view(-1, config.vocab_size), input_tok_labels.view(-1))
+                # ent_acc = accuracy(ent_prediction_scores.view(-1, config.max_entity_candidate), input_ent_labels.view(-1),ignore_index=-1)
+                # ent_mr = mean_rank(ent_prediction_scores.view(-1, config.max_entity_candidate), input_ent_labels.view(-1))
 
-            loss = tok_loss + ent_loss
+                loss = tok_loss + ent_loss
 
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel training
@@ -259,11 +251,9 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
                 tok_loss = tok_loss / args.gradient_accumulation_steps
                 ent_loss = ent_loss / args.gradient_accumulation_steps
 
-            if args.fp16:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
             tr_loss += loss.item()
             tok_tr_loss += tok_loss.item()
@@ -273,13 +263,19 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
             # tok_tr_mr += tok_mr
             # ent_tr_mr += ent_mr
             if (step + 1) % args.gradient_accumulation_steps == 0:
-                if args.fp16:
-                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
-                else:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                optimizer.step()
+                # Unscales the gradients of optimizer's assigned params in-place
+                scaler.unscale_(optimizer)
+
+                # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                
+                # Optimizer update
+                scaler.step(optimizer)
+                scaler.update()
                 scheduler.step()  # Update learning rate schedule
-                model.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
+
+                # Update global step
                 global_step += 1
 
                 if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
@@ -320,6 +316,7 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
                     state_for_resume = {
                         "scheduler": scheduler.state_dict(),
                         "optimizer": optimizer.state_dict(),
+                        "scaler": scaler.state_dict(),
                         "global_step": global_step,
                     }
                     torch.save(state_for_resume, os.path.join(output_dir, "state_for_resume.bin"))
@@ -837,7 +834,7 @@ def main():
         help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
         "See details at https://nvidia.github.io/apex/amp.html",
     )
-    parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
+    parser.add_argument("--local-rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
     args = parser.parse_args()
@@ -864,14 +861,15 @@ def main():
         ptvsd.wait_for_attach()
 
     # Setup CUDA, GPU & distributed training
+    print("local_rank", args.local_rank)
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-        args.n_gpu = torch.cuda.device_count()
+        args.n_gpu = 1
     else:  # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-        torch.cuda.set_device(args.local_rank)
+        # torch.cuda.set_device(args.local_rank)
         device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend="nccl")
-        args.n_gpu = 1
+        args.n_gpu = torch.cuda.device_count()
     args.device = device
 
     # Setup logging

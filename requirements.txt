@@ -5,3 +5,4 @@ tensorboard
 transformers
 pandas
 boto3
+jsonlines
