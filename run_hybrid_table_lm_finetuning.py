@@ -139,6 +139,15 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
     )
     scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
+    if args.resume != "":
+        state_for_resume = torch.load(os.path.join(args.resume, "state_for_resume.bin"))
+        scheduler.load_state_dict(state_for_resume["scheduler"])
+        optimizer.load_state_dict(state_for_resume["optimizer"])
+        scaler.load_state_dict(state_for_resume["scaler"])
+        global_step = state_for_resume["global_step"]
+        logger.info("resume from %s" % args.resume)
+    else:
+        global_step = 0
 
     # Distributed training (should be after apex fp16 initialization)
     if args.local_rank != -1:
@@ -160,7 +169,6 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
     logger.info("  Gradient Accumulation steps = %d", args.gradient_accumulation_steps)
     logger.info("  Total optimization steps = %d", t_total)
 
-    global_step = 0
     tr_loss, logging_loss = 0.0, 0.0
     tok_tr_loss, tok_logging_loss, ent_tr_loss, ent_logging_loss = 0.0, 0.0, 0.0, 0.0
     # tok_tr_acc, tok_logging_acc, ent_tr_acc, ent_logging_acc = 0.0, 0.0, 0.0, 0.0
