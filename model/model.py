@@ -472,7 +472,6 @@ class TableEncoderSimple(nn.Module):
         if is_bert:
             for x in state_dict:
                 state_dict[x] = checkpoint["bert.encoder." + x]
-                print("load %s <- %s" % (x, "bert.encoder." + x))
         else:
             for x in state_dict:
                 state_dict[x] = checkpoint["table.encoder." + x]
@@ -609,10 +608,8 @@ class TableMLMHead(nn.Module):
         for x in state_dict:
             if x.find("tok_predictions") != -1:
                 state_dict[x] = checkpoint["cls." + x[4:]]
-                print("load %s <- %s" % (x, "cls." + x[4:]))
             elif x.find("bias") == -1:
                 state_dict[x] = checkpoint["cls." + x[4:]]
-                print("load %s <- %s" % (x, "cls." + x[4:]))
         self.load_state_dict(state_dict)
 
     def forward(self, tok_sequence_output, ent_sequence_output, ent_candidates, ent_candidates_embeddings):
