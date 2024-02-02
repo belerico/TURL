@@ -25,6 +25,7 @@ import argparse
 import glob
 import logging
 import os
+import pdb
 import pickle
 import random
 import re
@@ -34,22 +35,15 @@ import numpy as np
 import torch
 from torch.utils.data import RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
-
-try:
-    from torch.utils.tensorboard import SummaryWriter
-except:
-    from tensorboardX import SummaryWriter
-
-import pdb
-
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
+from transformers import WEIGHTS_NAME, BertTokenizer, get_linear_schedule_with_warmup
 
 from data_loader.hybrid_data_loaders import *
 from model.configuration import TableConfig
 from model.metric import *
 from model.model import HybridTableCER
 from model.optim import DenseSparseAdam
-from model.transformers import WEIGHTS_NAME, BertTokenizer, get_linear_schedule_with_warmup
 from utils.util import *
 
 logger = logging.getLogger(__name__)

@@ -13,8 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""PyTorch BERT model. """
-
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import logging
@@ -22,14 +20,12 @@ import sys
 
 import torch
 from torch import nn
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MultiLabelSoftMarginLoss
-
-from model.transformers.modeling_bert import (
+from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, LayerNorm, MultiLabelSoftMarginLoss
+from transformers.models.bert.modeling_bert import (
     ACT2FN,
     BertAttention,
     BertForSequenceClassification,
     BertIntermediate,
-    BertLayerNorm,
     BertLMPredictionHead,
     BertModel,
     BertOutput,
@@ -53,7 +49,7 @@ class TableEmbeddings(nn.Module):
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def load_pretrained(self, checkpoint, is_bert=True):
@@ -116,7 +112,7 @@ class TableHeaderEmbeddings(nn.Module):
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def load_pretrained(self, checkpoint, is_bert=True):
@@ -178,7 +174,7 @@ class TableHybridEmbeddings(nn.Module):
             self.transform_act_fn = config.hidden_act
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def load_pretrained(self, checkpoint, is_bert=True):
@@ -274,7 +270,7 @@ class TableELEmbeddings(nn.Module):
             config.ent_type_vocab_size, config.hidden_size, padding_idx=0, sparse=True
         )
 
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def load_pretrained(self, checkpoint, is_bert=True):
@@ -580,7 +576,7 @@ class TableLMSubPredictionHead(nn.Module):
 
     def __init__(self, config, output_dim=None, use_bias=True):
         super(TableLMSubPredictionHead, self).__init__()
-        self.transform = BertPredictionHeadTransform(config, output_dim=output_dim)
+        self.transform = BertPredictionHeadTransform(config)
         if use_bias:
             self.bias = nn.Embedding.from_pretrained(torch.zeros(config.ent_vocab_size, 1), freeze=False)
         else:
@@ -606,6 +602,7 @@ class TableMLMHead(nn.Module):
     def load_pretrained(self, checkpoint):
         state_dict = self.state_dict()
         for x in state_dict:
+            print("cls." + x[4:])
             if x.find("tok_predictions") != -1:
                 state_dict[x] = checkpoint["cls." + x[4:]]
             elif x.find("bias") == -1:

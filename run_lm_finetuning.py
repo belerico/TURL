@@ -33,12 +33,7 @@ import numpy as np
 import torch
 from torch.utils.data import RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
-
-try:
-    from torch.utils.tensorboard import SummaryWriter
-except:
-    from tensorboardX import SummaryWriter
-
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
 from transformers import (
     WEIGHTS_NAME,

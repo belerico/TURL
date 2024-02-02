@@ -9,8 +9,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-
-from model.transformers import BertTokenizer
+from transformers.models.bert.tokenization_bert import BertTokenizer
 
 
 def process_single_RE(input_data, config):

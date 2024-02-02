@@ -22,7 +22,7 @@ import logging
 import sys
 from io import open
 
-from model.transformers.configuration_utils import PretrainedConfig
+from transformers.configuration_utils import PretrainedConfig
 
 logger = logging.getLogger(__name__)
 

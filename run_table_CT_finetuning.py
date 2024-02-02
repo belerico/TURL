@@ -33,20 +33,15 @@ import numpy as np
 import torch
 from torch.utils.data import RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
-
-try:
-    from torch.utils.tensorboard import SummaryWriter
-except:
-    from tensorboardX import SummaryWriter
-
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
+from transformers import WEIGHTS_NAME, AdamW, BertTokenizer, get_linear_schedule_with_warmup
 
 from data_loader.CT_Wiki_data_loaders import *
 from data_loader.data_loaders import *
 from model.configuration import TableConfig
 from model.metric import *
 from model.model import HybridTableCT
-from model.transformers import WEIGHTS_NAME, AdamW, BertTokenizer, get_linear_schedule_with_warmup
 from utils.util import *
 
 logger = logging.getLogger(__name__)

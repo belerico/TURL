@@ -28,6 +28,7 @@ import os
 import random
 import re
 import shutil
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -38,12 +39,12 @@ from tqdm import tqdm, trange
 from transformers import WEIGHTS_NAME, get_linear_schedule_with_warmup
 
 from data_loader.data_loaders import EntityTableLoader, WikiEntityTableDataset
-from data_loader.hybrid_data_loaders import *
+from data_loader.hybrid_data_loaders import HybridTableLoader, WikiHybridTableDataset
 from model.configuration import TableConfig
-from model.metric import *
+from model.metric import accuracy, mean_average_precision, mean_rank, top_k_acc
 from model.model import HybridTableMaskedLM
 from model.optim import DenseSparseAdam
-from utils.util import *
+from utils.util import create_ent_embedding, generate_vocab_distribution, load_entity_vocab
 
 logger = logging.getLogger(__name__)
 
@@ -308,8 +309,10 @@ def train(
                         os.makedirs(output_dir)
 
                     # Take care of distributed/parallel training
-                    model_to_save = getattr(model, "module", model)
-                    model_to_save.save_pretrained(output_dir)
+                    model_to_save = model.module if hasattr(model, "module") else model
+                    model_to_save.save_pretrained(
+                        output_dir, safe_serialization=False, is_main_process=args.local_rank in {-1, 0}
+                    )
 
                     # Save CLI args
                     torch.save(args, os.path.join(output_dir, "training_args.bin"))
@@ -923,9 +926,7 @@ def main():
 
     if args.do_train:
         if args.resume == "":
-            lm_model_dir = "tiny-bert"
-            lm_checkpoint = torch.load(lm_model_dir + "/pytorch_model.bin")
-            model.load_pretrained(lm_checkpoint)
+            model.from_pretrained("huawei-noah/TinyBERT_General_4L_312D", config=config)
             new_ent_embeddings_dir = Path("./ent_embeddings")
             new_ent_embeddings_dir.mkdir(parents=True, exist_ok=True)
             if not os.path.exists(new_ent_embeddings_dir / "new_ent_embeddings.bin"):
@@ -997,19 +998,14 @@ def main():
         )
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
-    # Saving best-practices: if you use save_pretrained for the model and tokenizer, you can reload them using from_pretrained()
+    # Saving last checkpoint
     if args.do_train and args.local_rank in {-1, 0}:
         output_dir = os.path.join(tb_logger.log_dir, "checkpoints", "checkpoint-last")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-
         logger.info("Saving last model checkpoint to %s", output_dir)
-        # Save a trained model, configuration and tokenizer using `save_pretrained()`.
-        # They can then be reloaded using `from_pretrained()`
-        model_to_save = getattr(model, "module", model)
-        model_to_save.save_pretrained(output_dir)
-
-        # Good practice: save your training arguments together with the trained model
+        model_to_save = model.module if hasattr(model, "module") else model
+        model_to_save.save_pretrained(output_dir, safe_serialization=False, is_main_process=args.local_rank in {-1, 0})
         torch.save(args, os.path.join(output_dir, "training_args.bin"))
 
     # Evaluation
