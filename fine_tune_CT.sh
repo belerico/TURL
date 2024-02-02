@@ -16,7 +16,7 @@ CUDA_VISIBLE_DEVICES="1" python run_table_CT_finetuning.py \
     --seed=1 \
     --cache_dir=cache \
     --overwrite_output_dir \
-    --config_name=configs/table-base-config_v2.json \
+    --config_name=src/configs/table-base-config_v2.json \
     --save_steps=5000 \
     --logging_steps=1500 \
     --warmup_steps=5000 \

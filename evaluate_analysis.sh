@@ -13,6 +13,6 @@ CUDA_VISIBLE_DEVICES="1" python run_table_lm_finetuning.py \
     --seed=1 \
     --cache_dir=cache \
     --max_entity_candidate=30000 \
-    --config_name=configs/table-base-config.json \
+    --config_name=src/configs/table-base-config.json \
     --sample_distribution \
     --use_cand

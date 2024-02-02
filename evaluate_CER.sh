@@ -4,4 +4,4 @@ CUDA_VISIBLE_DEVICES="0" python evaluate_task.py \
     --cached_baseline=data/wikisql_entity/dev_result_CER.pkl \
     --task=CER \
     --data_dir=data/wikisql_entity \
-    --config_name=configs/table-base-config.json \
+    --config_name=src/configs/table-base-config.json \

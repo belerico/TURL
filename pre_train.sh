@@ -19,7 +19,7 @@ CUDA_VISIBLE_DEVICES="3" python run_table_lm_finetuning.py \
     --cache_dir=cache \
     --overwrite_output_dir \
     --max_entity_candidate=30000 \
-    --config_name=configs/table-base-config.json \
+    --config_name=src/configs/table-base-config.json \
     --save_steps=10000 \
     --logging_steps=500 \
     --use_cand \

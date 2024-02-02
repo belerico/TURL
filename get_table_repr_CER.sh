@@ -9,5 +9,5 @@ CUDA_VISIBLE_DEVICES="1" python run_table_CER_finetuning.py \
     --seed=1 \
     --cache_dir=cache \
     --max_entity_candidate=10000 \
-    --config_name=configs/table-base-config_v2.json \
+    --config_name=src/configs/table-base-config_v2.json \
     --get_table_repr

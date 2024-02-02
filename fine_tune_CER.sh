@@ -18,7 +18,7 @@ CUDA_VISIBLE_DEVICES="0" python run_table_CER_finetuning.py \
     --cache_dir=cache \
     --overwrite_output_dir \
     --max_entity_candidate=10000 \
-    --config_name=configs/table-base-config_v2.json \
+    --config_name=src/configs/table-base-config_v2.json \
     --save_steps=5000 \
     --logging_steps=1000 \
     --use_cand > output/CER/v2/$OUTPUT_DIR"_seed_"$SEED"_10000"/train.log 2>&1 &

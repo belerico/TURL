@@ -19,7 +19,7 @@ CUDA_VISIBLE_DEVICES="1" python -m torch.distributed.launch --nproc-per-node=1 .
     --cache_dir=cache \
     --overwrite_output_dir \
     --max_entity_candidate=10000 \
-    --config_name=configs/table-base-config_v2.json \
+    --config_name=src/configs/table-base-config_v2.json \
     --save_steps=40 \
     --logging_steps=40 \
     --use_cand \

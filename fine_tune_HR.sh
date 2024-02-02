@@ -17,7 +17,7 @@ CUDA_VISIBLE_DEVICES="1" python run_table_HR_finetuning.py \
     --seed_num=$SEED \
     --cache_dir=cache \
     --overwrite_output_dir \
-    --config_name=configs/table-base-config_v2.json \
+    --config_name=src/configs/table-base-config_v2.json \
     --save_steps=2500 \
     --logging_steps=500 > output/HR/v2/$SEED/$OUTPUT_DIR/train.log 2>&1 &
 
@@ -39,7 +39,7 @@ CUDA_VISIBLE_DEVICES="1" python run_table_HR_finetuning.py \
 #     --seed_num=1 \
 #     --cache_dir=cache \
 #     --overwrite_output_dir \
-#     --config_name=configs/table-base-config.json \
+#     --config_name=src/configs/table-base-config.json \
 #     --save_steps=2500 \
 #     --logging_steps=500 \
 #     --is_bert > /dev/null 2>&1 &

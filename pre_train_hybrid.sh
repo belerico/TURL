@@ -20,7 +20,7 @@ CUDA_VISIBLE_DEVICES="0" python run_hybrid_table_lm_finetuning.py \
     --cache_dir=cache \
     --overwrite_output_dir \
     --max_entity_candidate=5000 \
-    --config_name=configs/table-base-config.json \
+    --config_name=src/configs/table-base-config.json \
     --save_steps=5000 \
     --logging_steps=500 \
     --use_cand \

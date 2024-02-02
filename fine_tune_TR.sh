@@ -15,7 +15,7 @@ CUDA_VISIBLE_DEVICES="0" python run_table_TR_finetuning.py \
     --seed=1 \
     --cache_dir=cache \
     --overwrite_output_dir \
-    --config_name=configs/table-base-config.json \
+    --config_name=src/configs/table-base-config.json \
     --save_steps=1000 \
     --logging_steps=1000 \
     --neg_num=5
