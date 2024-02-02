@@ -837,9 +837,8 @@ def main():
         action="store_true",
         help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",
     )
+    parser.add_argument("--dry_run", action="store_true", help="Sanity checks for training.")
     parser.add_argument("--local-rank", type=int, default=-1, help="For distributed training: local_rank")
-    parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
-    parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
     args = parser.parse_args()
     args.data_dir = os.path.expanduser(args.data_dir)
 
@@ -961,7 +960,7 @@ def main():
             max_length=[50, 10, 10],
             force_new=False,
             tokenizer=None,
-            dry_run=True,
+            dry_run=args.dry_run,
         )
         eval_dataset = WikiHybridTableDataset(
             args.data_dir,
@@ -973,7 +972,7 @@ def main():
             max_length=[50, 10, 10],
             force_new=False,
             tokenizer=None,
-            dry_run=True,
+            dry_run=args.dry_run,
         )
 
         assert config.vocab_size == len(train_dataset.tokenizer) and config.ent_vocab_size == len(

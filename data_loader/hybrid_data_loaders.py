@@ -595,6 +595,8 @@ class WikiHybridTableDataset(Dataset):
         self.entity_wikid2id = {self.entity_vocab[x]["wiki_id"]: x for x in self.entity_vocab}
         self.dry_run = dry_run
         self.data = self._preprocess(data_dir)
+        if self.dry_run:
+            self.data = self.data[:2000]
 
     def __len__(self):
         return len(self.data)
