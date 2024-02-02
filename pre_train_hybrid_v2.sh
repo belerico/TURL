@@ -1,5 +1,4 @@
-#OUTPUT_DIR=output/hybrid/v2/model_v1_table_0.2_0.6_0.7_10000_1e-4_candnew_0_adam_no_visibility_test
-CUDA_VISIBLE_DEVICES="0,1" python -m torch.distributed.launch --nproc-per-node=2 run_hybrid_table_lm_finetuning.py \
+CUDA_VISIBLE_DEVICES="0,1" python -m torch.distributed.launch --nproc-per-node=2 ./pre_training/run_hybrid_table_lm_finetuning.py \
     --output_dir='./output' \
     --model_type=hybrid \
     --model_name_or_path=bert-base-uncased \
@@ -26,5 +25,4 @@ CUDA_VISIBLE_DEVICES="0,1" python -m torch.distributed.launch --nproc-per-node=2
     --use_cand \
     --fp16 \
     --exclusive_ent=0 \
-    --random_sample #> /dev/null 2>&1 &
-    # --resume=output/hybrid/v2/model_v1_table_0.2_0.4_0.7_10000_1e-4_cand_0_adam/checkpoint-35000/pytorch_model.bin \
+    --random_sample
