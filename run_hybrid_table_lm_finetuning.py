@@ -274,11 +274,17 @@ def train(
                 global_step += 1
 
                 # Log metrics
-                if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                if args.local_rank in {-1, 0} and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Only evaluate when single GPU otherwise metrics may not average well
                     if args.evaluate_during_training:
                         results = evaluate(
-                            args, config, eval_dataset, getattr(model, "module", model), sample_distribution=None
+                            args,
+                            config,
+                            eval_dataset,
+                            getattr(model, "module", model),
+                            prefix="checkpoints/checkpoint-{}".format(global_step),
+                            sample_distribution=None,
+                            log_dir=tb_logger.log_dir,
                         )
                         for key, value in results.items():
                             tb_logger.log_metrics({"eval/{}".format(key): value}, global_step)
@@ -295,7 +301,7 @@ def train(
                         global_step,
                     )
 
-                if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
+                if args.local_rank in {-1, 0} and args.save_steps > 0 and global_step % args.save_steps == 0:
                     # Save model checkpoint
                     output_dir = os.path.join(tb_logger.log_dir, "checkpoints", "checkpoint-{}".format(global_step))
                     if not os.path.exists(output_dir):
@@ -330,9 +336,8 @@ def train(
         if args.max_steps > 0 and global_step > args.max_steps:
             train_iterator.close()
             break
-
-    if args.local_rank in [-1, 0]:
-        tb_logger.finalize()
+    if args.local_rank in {-1, 0}:
+        tb_logger.finalize("success")
 
     return global_step, tr_loss / max(global_step, 1)
 
@@ -348,9 +353,10 @@ def evaluate(
 ):
     # Loop to handle MNLI double evaluation (matched, mis-matched)
     eval_output_dir = args.output_dir if log_dir is None else log_dir
+    output_eval_file = os.path.join(eval_output_dir, prefix, "eval_results.txt")
 
-    if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
-        os.makedirs(eval_output_dir)
+    if args.local_rank in {-1, 0}:
+        os.makedirs(os.path.dirname(output_eval_file), exist_ok=True)
 
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
     eval_sampler = SequentialSampler(eval_dataset)
@@ -473,7 +479,7 @@ def evaluate(
     }
 
     output_eval_file = os.path.join(eval_output_dir, prefix, "eval_results.txt")
-    with open(output_eval_file, "w") as writer:
+    with open(output_eval_file, "w+") as writer:
         logger.info("***** Eval results {} *****".format(prefix))
         for key in sorted(result.keys()):
             logger.info("  %s = %s", key, str(result[key]))
@@ -495,7 +501,7 @@ def evaluate_analysis(
     # Loop to handle MNLI double evaluation (matched, mis-matched)
     eval_output_dir = args.output_dir if log_dir is None else log_dir
 
-    if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
+    if not os.path.exists(eval_output_dir) and args.local_rank in {-1, 0}:
         os.makedirs(eval_output_dir)
 
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
@@ -783,7 +789,6 @@ def main():
         "--evaluate_during_training", action="store_true", help="Run evaluation during training at each logging step."
     )
     parser.add_argument("--do_lower_case", action="store_true", help="Set this flag if you are using an uncased model.")
-
     parser.add_argument("--per_gpu_train_batch_size", default=4, type=int, help="Batch size per GPU/CPU for training.")
     parser.add_argument("--per_gpu_eval_batch_size", default=4, type=int, help="Batch size per GPU/CPU for evaluation.")
     parser.add_argument(
@@ -806,7 +811,6 @@ def main():
         help="If > 0: set total number of training steps to perform. Override num_train_epochs.",
     )
     parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.")
-
     parser.add_argument("--logging_steps", type=int, default=50, help="Log every X updates steps.")
     parser.add_argument("--save_steps", type=int, default=50, help="Save checkpoint every X updates steps.")
     parser.add_argument(
@@ -828,23 +832,16 @@ def main():
         "--overwrite_cache", action="store_true", help="Overwrite the cached training and evaluation sets"
     )
     parser.add_argument("--seed", type=int, default=1, help="random seed for initialization")
-
     parser.add_argument(
         "--fp16",
         action="store_true",
         help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",
     )
-    parser.add_argument(
-        "--fp16_opt_level",
-        type=str,
-        default="O1",
-        help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
-        "See details at https://nvidia.github.io/apex/amp.html",
-    )
     parser.add_argument("--local-rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
     args = parser.parse_args()
+    args.data_dir = os.path.expanduser(args.data_dir)
 
     if (
         os.path.exists(args.output_dir)
@@ -873,7 +870,7 @@ def main():
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN,
+        level=logging.INFO if args.local_rank in {-1, 0} else logging.WARN,
     )
     logger.warning(
         "Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
@@ -903,6 +900,9 @@ def main():
     tb_logger.experiment.add_text(
         "HF config",
         "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in config.to_dict().items()])),
+    )
+    logger.info(
+        "Training/evaluation parameters\n%s" % ("\n".join([f"{key}: {value}" for key, value in vars(args).items()]))
     )
 
     # Load pretrained model and tokenizer
@@ -944,8 +944,6 @@ def main():
     if args.local_rank == 0:
         torch.distributed.barrier()  # End of barrier to make sure only the first process in distributed training download model & vocab
 
-    logger.info("Training/evaluation parameters %s", args)
-
     # Training
     if args.do_train:
         if args.local_rank not in [-1, 0]:
@@ -963,6 +961,7 @@ def main():
             max_length=[50, 10, 10],
             force_new=False,
             tokenizer=None,
+            dry_run=True,
         )
         eval_dataset = WikiHybridTableDataset(
             args.data_dir,
@@ -974,6 +973,7 @@ def main():
             max_length=[50, 10, 10],
             force_new=False,
             tokenizer=None,
+            dry_run=True,
         )
 
         assert config.vocab_size == len(train_dataset.tokenizer) and config.ent_vocab_size == len(
@@ -999,30 +999,24 @@ def main():
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
     # Saving best-practices: if you use save_pretrained for the model and tokenizer, you can reload them using from_pretrained()
-    if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
-        # Create output directory if needed
-        if not os.path.exists(args.output_dir) and args.local_rank in [-1, 0]:
-            os.makedirs(args.output_dir)
+    if args.do_train and args.local_rank in {-1, 0}:
+        output_dir = os.path.join(tb_logger.log_dir, "checkpoints", "checkpoint-last")
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
-        logger.info("Saving model checkpoint to %s", args.output_dir)
+        logger.info("Saving last model checkpoint to %s", output_dir)
         # Save a trained model, configuration and tokenizer using `save_pretrained()`.
         # They can then be reloaded using `from_pretrained()`
-        model_to_save = (
-            model.module if hasattr(model, "module") else model
-        )  # Take care of distributed/parallel training
-        model_to_save.save_pretrained(args.output_dir)
+        model_to_save = getattr(model, "module", model)
+        model_to_save.save_pretrained(output_dir)
 
         # Good practice: save your training arguments together with the trained model
-        torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
-
-        # Load a trained model and vocabulary that you have fine-tuned
-        model = HybridTableMaskedLM.from_pretrained(args.output_dir)
-        model.to(args.device)
+        torch.save(args, os.path.join(output_dir, "training_args.bin"))
 
     # Evaluation
     results = {}
-    if args.do_eval and args.local_rank in [-1, 0]:
-        checkpoints_folder = os.path.join(args.output_dir, "checkpoints")
+    if args.do_eval and args.local_rank in {-1, 0}:
+        checkpoints_folder = os.path.join(tb_logger.log_dir, "checkpoints")
         checkpoints = [checkpoints_folder]
         if args.eval_all_checkpoints:
             checkpoints = list(
@@ -1030,17 +1024,18 @@ def main():
                 for c in sorted(glob.glob(checkpoints_folder + "/**/" + WEIGHTS_NAME, recursive=True))
             )
             logging.getLogger("transformers.modeling_utils").setLevel(logging.WARN)  # Reduce logging
-        logger.info("Evaluate the following checkpoints: %s", checkpoints)
+        logger.info("Evaluate the following checkpoints: %s", ", ".join(checkpoints))
+        model = getattr(model, "module", model)
         for checkpoint in checkpoints:
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
             prefix = checkpoint.split("/")[-1] if checkpoint.find("checkpoint") != -1 else ""
-            model = HybridTableMaskedLM.from_pretrained(checkpoint)
+            model.load_state_dict(torch.load(os.path.join(checkpoint, WEIGHTS_NAME)))
             model.to(args.device)
-            result = evaluate(args, config, eval_dataset, model, prefix=prefix)
+            result = evaluate(args, config, eval_dataset, model, prefix=prefix, log_dir=tb_logger.log_dir)
             result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
             results.update(result)
 
-    if args.do_analysis and args.local_rank in [-1, 0]:
+    if args.do_analysis and args.local_rank in {-1, 0}:
         import pdb
 
         pdb.set_trace()
@@ -1070,6 +1065,7 @@ def main():
             getattr(model, "module", model),
             output_file,
             sample_distribution=sample_distribution,
+            log_dir=tb_logger.log_dir,
         )
         output_file.flush()
         output_file.close()
