@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES="1" python -m torch.distributed.launch --nproc-per-node=1 ./pre_training/run_hybrid_table_lm_finetuning.py \
+CUDA_VISIBLE_DEVICES="1" python -m torch.distributed.launch --nproc-per-node=1 ./run_hybrid_table_lm_finetuning.py \
     --output_dir='./output' \
     --model_type=hybrid \
     --model_name_or_path=bert-base-uncased \
