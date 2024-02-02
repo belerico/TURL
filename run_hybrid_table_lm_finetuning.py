@@ -19,7 +19,7 @@ GPT and GPT-2 are fine-tuned using a causal language modeling (CLM) loss while B
 using a masked language modeling (MLM) loss.
 """
 
-from __future__ import absolute_import, division, print_function
+from __future__ import absolute_import, annotations, division, print_function
 
 import argparse
 import glob
@@ -32,10 +32,10 @@ import shutil
 import numpy as np
 import torch
 from lightning.fabric.loggers import TensorBoardLogger
-from torch.utils.data import RandomSampler, SequentialSampler
+from torch.utils.data import Dataset, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
-from transformers import WEIGHTS_NAME, BertTokenizer, get_linear_schedule_with_warmup
+from transformers import WEIGHTS_NAME, get_linear_schedule_with_warmup
 
 from data_loader.data_loaders import EntityTableLoader, WikiEntityTableDataset
 from data_loader.hybrid_data_loaders import *
@@ -47,11 +47,6 @@ from utils.util import *
 
 logger = logging.getLogger(__name__)
 
-MODEL_CLASSES = {
-    "hybrid": (TableConfig, HybridTableMaskedLM, BertTokenizer),
-    # 'CER': (TableConfig, TableCER, BertTokenizer)
-}
-
 
 def set_seed(args):
     random.seed(args.seed)
@@ -61,14 +56,16 @@ def set_seed(args):
         torch.cuda.manual_seed_all(args.seed)
 
 
-def _rotate_checkpoints(args, checkpoint_prefix, use_mtime=False, log_dir: str=None):
+def _rotate_checkpoints(args, checkpoint_prefix, use_mtime=False, log_dir: str = None):
     if not args.save_total_limit:
         return
     if args.save_total_limit <= 0:
         return
 
     # Check if we should delete older checkpoint(s)
-    glob_checkpoints = glob.glob(os.path.join(args.output_dir if log_dir is None else log_dir, "{}-*".format(checkpoint_prefix)))
+    glob_checkpoints = glob.glob(
+        os.path.join(args.output_dir if log_dir is None else log_dir, "{}-*".format(checkpoint_prefix))
+    )
     if len(glob_checkpoints) <= args.save_total_limit:
         return
 
@@ -90,12 +87,16 @@ def _rotate_checkpoints(args, checkpoint_prefix, use_mtime=False, log_dir: str=N
         shutil.rmtree(checkpoint)
 
 
-def train(args, config, train_dataset, model, eval_dataset=None, sample_distribution=None):
+def train(
+    args: argparse.Namespace,
+    config: TableConfig,
+    train_dataset: Dataset,
+    model: HybridTableMaskedLM,
+    tb_logger: TensorBoardLogger,
+    eval_dataset: Dataset | None = None,
+    sample_distribution: np.ndarray | None = None,
+):
     """Train the model"""
-    if args.local_rank in [-1, 0]:
-        tb_logger = TensorBoardLogger(os.path.join(args.output_dir, "logs"), name="turl")
-        tb_logger.log_hyperparams(args)
-
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
     train_dataloader = HybridTableLoader(
@@ -166,13 +167,12 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
 
     tr_loss, logging_loss = 0.0, 0.0
     tok_tr_loss, tok_logging_loss, ent_tr_loss, ent_logging_loss = 0.0, 0.0, 0.0, 0.0
-    # tok_tr_acc, tok_logging_acc, ent_tr_acc, ent_logging_acc = 0.0, 0.0, 0.0, 0.0
-    # tok_tr_mr, tok_logging_mr, ent_tr_mr, ent_logging_mr = 0.0, 0.0, 0.0, 0.0
-    # model.module.resize_token_embeddings(len(tokenizer))
+
+    set_seed(args)
     model.zero_grad(set_to_none=True)
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0])
-    set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
     for _ in train_iterator:
+        model.train()
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
             (
@@ -208,7 +208,6 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
             input_ent_labels = input_ent_labels.to(args.device)
             candidate_entity_set = candidate_entity_set.to(args.device)
             core_entity_mask = core_entity_mask.to(args.device)
-            model.train()
             if args.exclusive_ent == 0:  # no mask
                 exclusive_ent_mask = None
             else:
@@ -239,18 +238,10 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
                 )
                 tok_loss = tok_outputs[0]  # model outputs are always tuple in transformers (see doc)
                 ent_loss = ent_outputs[0]
-
-                # tok_prediction_scores = tok_outputs[1]
-                # ent_prediction_scores = ent_outputs[1]
-                # tok_acc = accuracy(tok_prediction_scores.view(-1, config.vocab_size), input_tok_labels.view(-1),ignore_index=-1)
-                # tok_mr = mean_rank(tok_prediction_scores.view(-1, config.vocab_size), input_tok_labels.view(-1))
-                # ent_acc = accuracy(ent_prediction_scores.view(-1, config.max_entity_candidate), input_ent_labels.view(-1),ignore_index=-1)
-                # ent_mr = mean_rank(ent_prediction_scores.view(-1, config.max_entity_candidate), input_ent_labels.view(-1))
-
                 loss = tok_loss + ent_loss
 
             if args.n_gpu > 1:
-                loss = loss.mean()  # mean() to average on multi-gpu parallel training
+                loss = loss.mean()
                 tok_loss = tok_loss.mean()
                 ent_loss = ent_loss.mean()
             if args.gradient_accumulation_steps > 1:
@@ -265,10 +256,7 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
             tr_loss += loss.item()
             tok_tr_loss += tok_loss.item()
             ent_tr_loss += ent_loss.item()
-            # tok_tr_acc += tok_acc
-            # ent_tr_acc += ent_acc
-            # tok_tr_mr += tok_mr
-            # ent_tr_mr += ent_mr
+
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 # Unscales the gradients of optimizer's assigned params in-place
                 scaler.unscale_(optimizer)
@@ -285,12 +273,13 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
                 # Update global step
                 global_step += 1
 
+                # Log metrics
                 if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
-                    # Log metrics
-                    if (
-                        args.local_rank == -1 and args.evaluate_during_training
-                    ):  # Only evaluate when single GPU otherwise metrics may not average well
-                        results = evaluate(args, config, eval_dataset, model, sample_distribution=None)
+                    # Only evaluate when single GPU otherwise metrics may not average well
+                    if args.evaluate_during_training:
+                        results = evaluate(
+                            args, config, eval_dataset, getattr(model, "module", model), sample_distribution=None
+                        )
                         for key, value in results.items():
                             tb_logger.log_metrics({"eval/{}".format(key): value}, global_step)
                     logging_loss = tr_loss
@@ -307,16 +296,19 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
                     )
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
-                    checkpoint_prefix = "checkpoint"
                     # Save model checkpoint
-                    output_dir = os.path.join(tb_logger.log_dir, "checkpoints", "{}-{}".format(checkpoint_prefix, global_step))
+                    output_dir = os.path.join(tb_logger.log_dir, "checkpoints", "checkpoint-{}".format(global_step))
                     if not os.path.exists(output_dir):
                         os.makedirs(output_dir)
-                    model_to_save = (
-                        model.module if hasattr(model, "module") else model
-                    )  # Take care of distributed/parallel training
+
+                    # Take care of distributed/parallel training
+                    model_to_save = getattr(model, "module", model)
                     model_to_save.save_pretrained(output_dir)
+
+                    # Save CLI args
                     torch.save(args, os.path.join(output_dir, "training_args.bin"))
+
+                    # Save optimizer, scheduler and scaler
                     state_for_resume = {
                         "scheduler": scheduler.state_dict(),
                         "optimizer": optimizer.state_dict(),
@@ -326,7 +318,11 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
                     torch.save(state_for_resume, os.path.join(output_dir, "state_for_resume.bin"))
                     logger.info("Saving model checkpoint to %s", output_dir)
 
-                    _rotate_checkpoints(args, checkpoint_prefix, log_dir=tb_logger.log_dir)
+                    # Remove older checkpoints
+                    _rotate_checkpoints(args, "checkpoint", log_dir=tb_logger.log_dir)
+
+                # Possibly wait for rank-0 to log metrics and save model
+                torch.distributed.barrier()
 
             if args.max_steps > 0 and global_step > args.max_steps:
                 epoch_iterator.close()
@@ -341,16 +337,23 @@ def train(args, config, train_dataset, model, eval_dataset=None, sample_distribu
     return global_step, tr_loss / max(global_step, 1)
 
 
-def evaluate(args, config, eval_dataset, model, prefix="", sample_distribution=None):
+def evaluate(
+    args: argparse.Namespace,
+    config: TableConfig,
+    eval_dataset: Dataset,
+    model: HybridTableMaskedLM,
+    prefix: str = "",
+    sample_distribution: np.ndarray | None = None,
+    log_dir: str | None = None,
+):
     # Loop to handle MNLI double evaluation (matched, mis-matched)
-    eval_output_dir = args.output_dir
+    eval_output_dir = args.output_dir if log_dir is None else log_dir
 
     if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(eval_output_dir)
 
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
-    # Note that DistributedSampler samples randomly
-    eval_sampler = SequentialSampler(eval_dataset) if args.local_rank == -1 else DistributedSampler(eval_dataset)
+    eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = HybridTableLoader(
         eval_dataset,
         sampler=eval_sampler,
@@ -365,10 +368,6 @@ def evaluate(args, config, eval_dataset, model, prefix="", sample_distribution=N
         random_sample=False,
         use_visibility=False if args.no_visibility else True,
     )
-
-    # multi-gpu evaluate
-    if args.n_gpu > 1:
-        model = torch.nn.DataParallel(model)
 
     # Eval!
     logger.info("***** Running evaluation {} *****".format(prefix))
@@ -483,16 +482,24 @@ def evaluate(args, config, eval_dataset, model, prefix="", sample_distribution=N
     return result
 
 
-def evaluate_analysis(args, config, eval_dataset, model, output_file, prefix="", sample_distribution=None):
+def evaluate_analysis(
+    args,
+    config,
+    eval_dataset,
+    model,
+    output_file,
+    prefix: str = "",
+    sample_distribution: np.ndarray | None = None,
+    log_dir: str | None = None,
+):
     # Loop to handle MNLI double evaluation (matched, mis-matched)
-    eval_output_dir = args.output_dir
+    eval_output_dir = args.output_dir if log_dir is None else log_dir
 
     if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(eval_output_dir)
 
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
-    # Note that DistributedSampler samples randomly
-    eval_sampler = SequentialSampler(eval_dataset) if args.local_rank == -1 else DistributedSampler(eval_dataset)
+    eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = EntityTableLoader(
         eval_dataset,
         sampler=eval_sampler,
@@ -505,10 +512,6 @@ def evaluate_analysis(args, config, eval_dataset, model, output_file, prefix="",
         sample_distribution=sample_distribution,
         use_cand=args.use_cand,
     )
-
-    # multi-gpu evaluate
-    if args.n_gpu > 1:
-        model = torch.nn.DataParallel(model)
 
     # Eval!
     logger.info("***** Running evaluation {} *****".format(prefix))
@@ -855,17 +858,7 @@ def main():
             )
         )
 
-    # Setup distant debugging if needed
-    if args.server_ip and args.server_port:
-        # Distant debugging - see https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
-        import ptvsd
-
-        print("Waiting for debugger attach")
-        ptvsd.enable_attach(address=(args.server_ip, args.server_port), redirect_output=True)
-        ptvsd.wait_for_attach()
-
     # Setup CUDA, GPU & distributed training
-    print("local_rank", args.local_rank)
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
         args.n_gpu = 1
@@ -894,27 +887,29 @@ def main():
     # Set seed
     set_seed(args)
 
+    # Get model configuration
+    config = TableConfig.from_pretrained(
+        args.config_name if args.config_name else args.model_name_or_path,
+        cache_dir=args.cache_dir if args.cache_dir else None,
+    )
+    config.__dict__["max_entity_candidate"] = args.max_entity_candidate
+
+    # Setup TensorboardLogger
+    tb_logger = TensorBoardLogger(os.path.join(args.output_dir, "logs"), name="turl")
+    tb_logger.experiment.add_text(
+        "CLI arguments",
+        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+    )
+    tb_logger.experiment.add_text(
+        "HF config",
+        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in config.to_dict().items()])),
+    )
+
     # Load pretrained model and tokenizer
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training download model & vocab
 
-    config_class, model_class, _ = MODEL_CLASSES[args.model_type]
-    config = config_class.from_pretrained(
-        args.config_name if args.config_name else args.model_name_or_path,
-        cache_dir=args.cache_dir if args.cache_dir else None,
-    )
-    # tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
-    #                                             do_lower_case=args.do_lower_case,
-    #                                             cache_dir=args.cache_dir if args.cache_dir else None)
-    # if args.block_size <= 0:
-    #     args.block_size = tokenizer.max_len_single_sentence  # Our input block size will be the max possible for the model
-    # args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)
-    # model = model_class.from_pretrained(args.model_name_or_path,
-    #                                     from_tf=bool('.ckpt' in args.model_name_or_path),
-    #                                     config=config,
-    #                                     cache_dir=args.cache_dir if args.cache_dir else None)
-    config.__dict__["max_entity_candidate"] = args.max_entity_candidate
-
+    # Load entity vocab
     entity_vocab = load_entity_vocab(args.data_dir, ignore_bad_title=True, min_ent_count=2)
     if args.sample_distribution:
         sample_distribution = generate_vocab_distribution(entity_vocab)
@@ -923,8 +918,10 @@ def main():
     entity_wikid2id = {entity_vocab[x]["wiki_id"]: x for x in entity_vocab}
 
     assert config.ent_vocab_size == len(entity_vocab)
-    model = model_class(config, is_simple=True)
-    # pdb.set_trace()
+
+    # Create model
+    model = HybridTableMaskedLM(config, is_simple=True)
+
     if args.do_train:
         if args.resume == "":
             lm_model_dir = "tiny-bert"
@@ -943,7 +940,6 @@ def main():
             checkpoint = torch.load(args.resume)
             model.load_state_dict(checkpoint)
         model.to(args.device)
-        # model.table.embeddings.ent_embeddings.cpu()
 
     if args.local_rank == 0:
         torch.distributed.barrier()  # End of barrier to make sure only the first process in distributed training download model & vocab
@@ -953,7 +949,9 @@ def main():
     # Training
     if args.do_train:
         if args.local_rank not in [-1, 0]:
-            torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training process the dataset, and the others will use the cache
+            # Barrier to make sure only the first process in distributed training process the dataset
+            # while the others will use the cache
+            torch.distributed.barrier()
 
         train_dataset = WikiHybridTableDataset(
             args.data_dir,
@@ -988,8 +986,15 @@ def main():
         if args.local_rank == 0:
             torch.distributed.barrier()
 
+        # Run the training loop
         global_step, tr_loss = train(
-            args, config, train_dataset, model, eval_dataset=eval_dataset, sample_distribution=sample_distribution
+            args,
+            config,
+            train_dataset,
+            model,
+            tb_logger,
+            eval_dataset=eval_dataset,
+            sample_distribution=sample_distribution,
         )
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
@@ -1011,43 +1016,42 @@ def main():
         torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
 
         # Load a trained model and vocabulary that you have fine-tuned
-        model = model_class.from_pretrained(args.output_dir)
+        model = HybridTableMaskedLM.from_pretrained(args.output_dir)
         model.to(args.device)
-        # model.table.embeddings.ent_embeddings.cpu()
 
     # Evaluation
     results = {}
     if args.do_eval and args.local_rank in [-1, 0]:
-        checkpoints = [args.output_dir]
+        checkpoints_folder = os.path.join(args.output_dir, "checkpoints")
+        checkpoints = [checkpoints_folder]
         if args.eval_all_checkpoints:
             checkpoints = list(
-                os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + "/**/" + WEIGHTS_NAME, recursive=True))
+                os.path.dirname(c)
+                for c in sorted(glob.glob(checkpoints_folder + "/**/" + WEIGHTS_NAME, recursive=True))
             )
             logging.getLogger("transformers.modeling_utils").setLevel(logging.WARN)  # Reduce logging
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
         for checkpoint in checkpoints:
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
             prefix = checkpoint.split("/")[-1] if checkpoint.find("checkpoint") != -1 else ""
-
-            model = model_class.from_pretrained(checkpoint)
+            model = HybridTableMaskedLM.from_pretrained(checkpoint)
             model.to(args.device)
-            # model.table.embeddings.ent_embeddings.cpu()
             result = evaluate(args, config, eval_dataset, model, prefix=prefix)
             result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
             results.update(result)
 
-    if args.do_analysis:
+    if args.do_analysis and args.local_rank in [-1, 0]:
+        import pdb
+
         pdb.set_trace()
-        checkpoints = [args.output_dir]
         checkpoints = list(
-            os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + "/**/" + WEIGHTS_NAME, recursive=True))
+            os.path.dirname(c) for c in sorted(glob.glob(tb_logger.log_dir + "/**/" + WEIGHTS_NAME, recursive=True))
         )
         checkpoint = checkpoints[-1]
         checkpoint = torch.load(os.path.join(checkpoint, "pytorch_model.bin"))
-        output_file = open(os.path.join(args.output_dir, "dev_analysis.txt"), "w", encoding="utf-8")
+        output_file = open(os.path.join(tb_logger.log_dir, "dev_analysis.txt"), "w", encoding="utf-8")
         model.load_state_dict(checkpoint)
         model.to(args.device)
-        # model.table.embeddings.ent_embeddings.cpu()
         eval_dataset = WikiEntityTableDataset(
             args.data_dir,
             entity_vocab,
@@ -1059,8 +1063,16 @@ def main():
             force_new=False,
             tokenizer=None,
         )
-        evaluate_analysis(args, config, eval_dataset, model, output_file, sample_distribution=sample_distribution)
-        output_file.close
+        evaluate_analysis(
+            args,
+            config,
+            eval_dataset,
+            getattr(model, "module", model),
+            output_file,
+            sample_distribution=sample_distribution,
+        )
+        output_file.flush()
+        output_file.close()
 
     return results
 

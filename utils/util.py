@@ -5,6 +5,7 @@ import pickle
 from collections import OrderedDict
 from itertools import repeat
 from pathlib import Path
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
@@ -113,7 +114,7 @@ def load_entity_vocab(data_dir, ignore_bad_title=True, min_ent_count=1):
     return entity_vocab
 
 
-def generate_vocab_distribution(entity_vocab):
+def generate_vocab_distribution(entity_vocab: Dict[int, Any]) -> np.ndarray:
     distribution = np.zeros(len(entity_vocab))
     for i, item in entity_vocab.items():
         if i in RESERVED_ENT_VOCAB:
