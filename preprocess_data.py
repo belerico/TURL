@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 
-from data_loader.hybrid_data_loaders import HybridTableLoader, WikiHybridTableDataset
-from utils.util import load_entity_vocab
+from src.data_loader.hybrid_data_loaders import HybridTableLoader, WikiHybridTableDataset
+from src.utils.util import load_entity_vocab
 
 if __name__ == "__main__":
     torch.manual_seed(0)

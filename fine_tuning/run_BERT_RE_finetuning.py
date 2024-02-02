@@ -35,18 +35,17 @@ from torch.utils.data import RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
-from transformers import WEIGHTS_NAME, AdamW, BertTokenizer, get_linear_schedule_with_warmup
+from transformers import WEIGHTS_NAME, AdamW, BertConfig, BertTokenizer, get_linear_schedule_with_warmup
 
-from data_loader.CT_Wiki_data_loaders import *
-from data_loader.data_loaders import *
-from model.configuration import TableConfig
-from model.metric import *
-from model.model import HybridTableCT
-from utils.util import *
+from src.data_loader.data_loaders import *
+from src.data_loader.RE_data_loaders import *
+from src.model.metric import *
+from src.model.model import BertRE
+from src.utils.util import *
 
 logger = logging.getLogger(__name__)
 
-MODEL_CLASSES = {"CT": (TableConfig, HybridTableCT, BertTokenizer)}
+MODEL_CLASSES = {"REBERT": (BertConfig, BertRE, BertTokenizer)}
 
 
 def set_seed(args):
@@ -93,7 +92,9 @@ def train(args, config, train_dataset, model, eval_dataset=None):
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
-    train_dataloader = CTLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, is_train=True)
+    train_dataloader = REBERTLoader(
+        train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, is_train=True
+    )
 
     if args.max_steps > 0:
         t_total = args.max_steps
@@ -104,27 +105,25 @@ def train(args, config, train_dataset, model, eval_dataset=None):
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
-        # {'params': [p for n, p in model.table.named_parameters() if (not 'embedding' in n and not any(nd in n for nd in no_decay))], 'weight_decay': args.weight_decay, 'lr': args.learning_rate},
-        # {'params': [p for n, p in model.table.named_parameters() if (not 'embedding' in n and any(nd in n for nd in no_decay))], 'weight_decay': 0.0, 'lr': args.learning_rate},
         {
-            "params": [p for n, p in model.table.named_parameters() if (not any(nd in n for nd in no_decay))],
+            "params": [p for n, p in model.bert.named_parameters() if (not any(nd in n for nd in no_decay))],
             "weight_decay": args.weight_decay,
             "lr": args.learning_rate,
         },
         {
-            "params": [p for n, p in model.table.named_parameters() if (any(nd in n for nd in no_decay))],
+            "params": [p for n, p in model.bert.named_parameters() if (any(nd in n for nd in no_decay))],
             "weight_decay": 0.0,
             "lr": args.learning_rate,
         },
         {
-            "params": [p for n, p in model.cls.named_parameters() if not any(nd in n for nd in no_decay)],
+            "params": [p for n, p in model.classifier.named_parameters() if not any(nd in n for nd in no_decay)],
             "weight_decay": args.weight_decay,
-            "lr": args.learning_rate * 10 if args.cls_learning_rate == 0 else args.cls_learning_rate,
+            "lr": args.learning_rate * 10,
         },
         {
-            "params": [p for n, p in model.cls.named_parameters() if any(nd in n for nd in no_decay)],
+            "params": [p for n, p in model.classifier.named_parameters() if any(nd in n for nd in no_decay)],
             "weight_decay": 0.0,
-            "lr": args.learning_rate * 10 if args.cls_learning_rate == 0 else args.cls_learning_rate,
+            "lr": args.learning_rate * 10,
         },
     ]
     optimizer = AdamW(optimizer_grouped_parameters, eps=args.adam_epsilon)
@@ -171,87 +170,18 @@ def train(args, config, train_dataset, model, eval_dataset=None):
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
-            (
-                table_id,
-                input_tok,
-                input_tok_type,
-                input_tok_pos,
-                input_tok_mask,
-                input_ent_text,
-                input_ent_text_length,
-                input_ent,
-                input_ent_type,
-                input_ent_mask,
-                column_entity_mask,
-                column_header_mask,
-                labels_mask,
-                labels,
-            ) = batch
+            table_id, input_tok, input_tok_mask, labels = batch
             input_tok = input_tok.to(args.device)
-            input_tok_type = input_tok_type.to(args.device)
-            input_tok_pos = input_tok_pos.to(args.device)
             input_tok_mask = input_tok_mask.to(args.device)
-            input_ent_text = input_ent_text.to(args.device)
-            input_ent_text_length = input_ent_text_length.to(args.device)
-            input_ent = input_ent.to(args.device)
-            input_ent_type = input_ent_type.to(args.device)
-            input_ent_mask = input_ent_mask.to(args.device)
-            column_entity_mask = column_entity_mask.to(args.device)
-            column_header_mask = column_header_mask.to(args.device)
-            labels_mask = labels_mask.to(args.device)
             labels = labels.to(args.device)
             model.train()
-            if args.mode == 1:
-                input_ent_mask = input_ent_mask[:, :, input_tok_mask.shape[1] :]
-                input_tok = None
-                input_tok_type = None
-                input_tok_pos = None
-                input_tok_mask = None
-            elif args.mode == 2:
-                input_tok_mask = input_tok_mask[:, :, : input_tok_mask.shape[1]]
-                input_ent_text = None
-                input_ent_text_length = None
-                input_ent = None
-                input_ent_type = None
-                input_ent_mask = None
-            elif args.mode == 3:
-                input_ent = None
-            elif args.mode == 4:
-                input_ent_mask = input_ent_mask[:, :, input_tok_mask.shape[1] :]
-                input_tok = None
-                input_tok_type = None
-                input_tok_pos = None
-                input_tok_mask = None
-                input_ent = None
-            elif args.mode == 5:
-                input_ent_mask = input_ent_mask[:, :, input_tok_mask.shape[1] :]
-                input_tok = None
-                input_tok_type = None
-                input_tok_pos = None
-                input_tok_mask = None
-                input_ent_text = None
-                input_ent_text_length = None
-            outputs = model(
-                input_tok,
-                input_tok_type,
-                input_tok_pos,
-                input_tok_mask,
-                input_ent_text,
-                input_ent_text_length,
-                input_ent,
-                input_ent_type,
-                input_ent_mask,
-                column_entity_mask,
-                column_header_mask,
-                labels_mask,
-                labels,
-            )
+            outputs = model(input_tok, attention_mask=input_tok_mask, labels=labels)
             # model outputs are always tuple in transformers (see doc)
             loss = outputs[0]
 
             prediction_scores = outputs[1]
-            ap = average_precision(prediction_scores.view(-1, config.class_num), labels.view((-1, config.class_num)))
-            map = (ap * labels_mask.view(-1)).sum() / labels_mask.sum()
+            ap = average_precision(prediction_scores.view(-1, config.num_labels), labels.view((-1, config.num_labels)))
+            map = ap.sum() / len(ap)
 
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel training
@@ -281,12 +211,6 @@ def train(args, config, train_dataset, model, eval_dataset=None):
                     if (
                         args.local_rank == -1 and args.evaluate_during_training
                     ):  # Only evaluate when single GPU otherwise metrics may not average well
-                        logger.info("***** Train results *****")
-                        logger.info("  loss = %s", str((tr_loss - logging_loss) / args.logging_steps))
-                        logger.info(
-                            "  map = %s",
-                            str((tr_map - logging_map) / (args.gradient_accumulation_steps * args.logging_steps)),
-                        )
                         results = evaluate(args, config, eval_dataset, model)
                         for key, value in results.items():
                             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
@@ -341,7 +265,7 @@ def evaluate(args, config, eval_dataset, model, prefix=""):
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
     # Note that DistributedSampler samples randomly
     eval_sampler = SequentialSampler(eval_dataset) if args.local_rank == -1 else DistributedSampler(eval_dataset)
-    eval_dataloader = CTLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size, is_train=False)
+    eval_dataloader = REBERTLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size, is_train=False)
 
     # Eval!
     logger.info("***** Running evaluation {} *****".format(prefix))
@@ -352,86 +276,17 @@ def evaluate(args, config, eval_dataset, model, prefix=""):
     nb_eval_steps = 0
 
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
-        (
-            table_id,
-            input_tok,
-            input_tok_type,
-            input_tok_pos,
-            input_tok_mask,
-            input_ent_text,
-            input_ent_text_length,
-            input_ent,
-            input_ent_type,
-            input_ent_mask,
-            column_entity_mask,
-            column_header_mask,
-            labels_mask,
-            labels,
-        ) = batch
+        table_id, input_tok, input_tok_mask, labels = batch
         input_tok = input_tok.to(args.device)
-        input_tok_type = input_tok_type.to(args.device)
-        input_tok_pos = input_tok_pos.to(args.device)
         input_tok_mask = input_tok_mask.to(args.device)
-        input_ent_text = input_ent_text.to(args.device)
-        input_ent_text_length = input_ent_text_length.to(args.device)
-        input_ent = input_ent.to(args.device)
-        input_ent_type = input_ent_type.to(args.device)
-        input_ent_mask = input_ent_mask.to(args.device)
-        column_entity_mask = column_entity_mask.to(args.device)
-        column_header_mask = column_header_mask.to(args.device)
-        labels_mask = labels_mask.to(args.device)
         labels = labels.to(args.device)
-        if args.mode == 1:
-            input_ent_mask = input_ent_mask[:, :, input_tok_mask.shape[1] :]
-            input_tok = None
-            input_tok_type = None
-            input_tok_pos = None
-            input_tok_mask = None
-        elif args.mode == 2:
-            input_tok_mask = input_tok_mask[:, :, : input_tok_mask.shape[1]]
-            input_ent_text = None
-            input_ent_text_length = None
-            input_ent = None
-            input_ent_type = None
-            input_ent_mask = None
-        elif args.mode == 3:
-            input_ent = None
-        elif args.mode == 4:
-            input_ent_mask = input_ent_mask[:, :, input_tok_mask.shape[1] :]
-            input_tok = None
-            input_tok_type = None
-            input_tok_pos = None
-            input_tok_mask = None
-            input_ent = None
-        elif args.mode == 5:
-            input_ent_mask = input_ent_mask[:, :, input_tok_mask.shape[1] :]
-            input_tok = None
-            input_tok_type = None
-            input_tok_pos = None
-            input_tok_mask = None
-            input_ent_text = None
-            input_ent_text_length = None
         with torch.no_grad():
-            outputs = model(
-                input_tok,
-                input_tok_type,
-                input_tok_pos,
-                input_tok_mask,
-                input_ent_text,
-                input_ent_text_length,
-                input_ent,
-                input_ent_type,
-                input_ent_mask,
-                column_entity_mask,
-                column_header_mask,
-                labels_mask,
-                labels,
-            )
+            outputs = model(input_tok, attention_mask=input_tok_mask, labels=labels)
             loss = outputs[0]
             prediction_scores = outputs[1]
             # pdb.set_trace()
-            ap = average_precision(prediction_scores.view(-1, config.class_num), labels.view((-1, config.class_num)))
-            map = (ap * labels_mask.view(-1)).sum() / labels_mask.sum()
+            ap = average_precision(prediction_scores.view(-1, config.num_labels), labels.view((-1, config.num_labels)))
+            map = map = ap.sum() / len(ap)
             eval_loss += loss.mean().item()
             eval_map += map.item()
         nb_eval_steps += 1
@@ -514,7 +369,6 @@ def main():
         help="Number of updates steps to accumulate before performing a backward/update pass.",
     )
     parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.")
-    parser.add_argument("--cls_learning_rate", default=0, type=float, help="The initial learning rate for cls layer.")
     parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight deay if we apply some.")
     parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
@@ -627,16 +481,15 @@ def main():
         args.config_name if args.config_name else args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-    type_vocab = load_type_vocab(args.data_dir)
-    config.class_num = len(type_vocab)
+    type_vocab = load_relation_vocab(args.data_dir)
+    config.num_labels = len(type_vocab)
     config.mode = args.mode
-    model = model_class(config, is_simple=True)
+    model = model_class(config)
     if args.do_train:
         # lm_checkpoints = list(os.path.dirname(c) for c in sorted(glob.glob(args.model_name_or_path + '/**/' + WEIGHTS_NAME, recursive=True)))
         # logger.info("load pre-trained model from %s", lm_checkpoints[-1])
         # lm_checkpoint = torch.load(os.path.join(lm_checkpoints[-1],"pytorch_model.bin"))
-        lm_checkpoint = torch.load(os.path.join(args.model_name_or_path, "pytorch_model.bin"))
-        model.load_pretrained(lm_checkpoint)
+        model.from_pretrained(args.model_name_or_path)
         model.to(args.device)
 
     if args.local_rank == 0:
@@ -649,22 +502,23 @@ def main():
         if args.local_rank not in [-1, 0]:
             torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training process the dataset, and the others will use the cache
         entity_vocab = load_entity_vocab(args.data_dir, ignore_bad_title=True, min_ent_count=2)
-        train_dataset = WikiCTDataset(
+        # train_dataset = WikiCTDataset(args.data_dir, entity_vocab, type_vocab, max_input_tok=500, src="train", max_length = [50, 10, 10], force_new=False, tokenizer = None)
+        train_dataset = REBERTDataset(
             args.data_dir,
             entity_vocab,
             type_vocab,
             max_input_tok=500,
-            src="wiki_train10mix",
+            src="train",
             max_length=[50, 10, 10],
             force_new=False,
             tokenizer=None,
         )
-        eval_dataset = WikiCTDataset(
+        eval_dataset = REBERTDataset(
             args.data_dir,
             entity_vocab,
             type_vocab,
             max_input_tok=500,
-            src="wiki_test90",
+            src="dev",
             max_length=[50, 10, 10],
             force_new=False,
             tokenizer=None,

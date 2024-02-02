@@ -37,16 +37,16 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
 from transformers import WEIGHTS_NAME, AdamW, BertTokenizer, get_linear_schedule_with_warmup
 
-from baselines.row_population.metric import *
-from data_loader.data_loaders import *
-from data_loader.TR_data_loaders import *
-from model.configuration import TableConfig
-from model.model import BertTR, HybridTableTR
-from utils.util import *
+from src.data_loader.CT_Wiki_data_loaders import *
+from src.data_loader.data_loaders import *
+from src.model.configuration import TableConfig
+from src.model.metric import *
+from src.model.model import HybridTableCT
+from src.utils.util import *
 
 logger = logging.getLogger(__name__)
 
-MODEL_CLASSES = {"TR": (TableConfig, HybridTableTR, BertTokenizer), "TR_Bert": (TableConfig, BertTR, BertTokenizer)}
+MODEL_CLASSES = {"CT": (TableConfig, HybridTableCT, BertTokenizer)}
 
 
 def set_seed(args):
@@ -93,14 +93,7 @@ def train(args, config, train_dataset, model, eval_dataset=None):
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
-    train_dataloader = TRLoader(
-        train_dataset,
-        sampler=train_sampler,
-        batch_size=args.train_batch_size,
-        is_train=True,
-        neg_num=args.neg_num,
-        for_bert=args.model_type == "TR_Bert",
-    )
+    train_dataloader = CTLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, is_train=True)
 
     if args.max_steps > 0:
         t_total = args.max_steps
@@ -110,64 +103,30 @@ def train(args, config, train_dataset, model, eval_dataset=None):
 
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
-    if args.model_type == "TR_Bert":
-        optimizer_grouped_parameters = [
-            {
-                "params": [p for n, p in model.model.bert.named_parameters() if not any(nd in n for nd in no_decay)],
-                "weight_decay": args.weight_decay,
-                "lr": args.learning_rate,
-            },
-            {
-                "params": [p for n, p in model.model.bert.named_parameters() if any(nd in n for nd in no_decay)],
-                "weight_decay": 0.0,
-                "lr": args.learning_rate,
-            },
-            {
-                "params": [
-                    p for n, p in model.model.classifier.named_parameters() if not any(nd in n for nd in no_decay)
-                ],
-                "weight_decay": args.weight_decay,
-                "lr": args.learning_rate * 10,
-            },
-            {
-                "params": [p for n, p in model.model.classifier.named_parameters() if any(nd in n for nd in no_decay)],
-                "weight_decay": 0.0,
-                "lr": args.learning_rate * 10,
-            },
-        ]
-    else:
-        optimizer_grouped_parameters = [
-            {
-                "params": [p for n, p in model.table.named_parameters() if not any(nd in n for nd in no_decay)],
-                "weight_decay": args.weight_decay,
-                "lr": args.learning_rate,
-            },
-            {
-                "params": [p for n, p in model.table.named_parameters() if any(nd in n for nd in no_decay)],
-                "weight_decay": 0.0,
-                "lr": args.learning_rate,
-            },
-            {
-                "params": [p for n, p in model.pooler.named_parameters() if not any(nd in n for nd in no_decay)],
-                "weight_decay": args.weight_decay,
-                "lr": args.learning_rate * 10,
-            },
-            {
-                "params": [p for n, p in model.pooler.named_parameters() if any(nd in n for nd in no_decay)],
-                "weight_decay": 0.0,
-                "lr": args.learning_rate * 10,
-            },
-            {
-                "params": [p for n, p in model.cls.named_parameters() if not any(nd in n for nd in no_decay)],
-                "weight_decay": args.weight_decay,
-                "lr": args.learning_rate * 10,
-            },
-            {
-                "params": [p for n, p in model.cls.named_parameters() if any(nd in n for nd in no_decay)],
-                "weight_decay": 0.0,
-                "lr": args.learning_rate * 10,
-            },
-        ]
+    optimizer_grouped_parameters = [
+        # {'params': [p for n, p in model.table.named_parameters() if (not 'embedding' in n and not any(nd in n for nd in no_decay))], 'weight_decay': args.weight_decay, 'lr': args.learning_rate},
+        # {'params': [p for n, p in model.table.named_parameters() if (not 'embedding' in n and any(nd in n for nd in no_decay))], 'weight_decay': 0.0, 'lr': args.learning_rate},
+        {
+            "params": [p for n, p in model.table.named_parameters() if (not any(nd in n for nd in no_decay))],
+            "weight_decay": args.weight_decay,
+            "lr": args.learning_rate,
+        },
+        {
+            "params": [p for n, p in model.table.named_parameters() if (any(nd in n for nd in no_decay))],
+            "weight_decay": 0.0,
+            "lr": args.learning_rate,
+        },
+        {
+            "params": [p for n, p in model.cls.named_parameters() if not any(nd in n for nd in no_decay)],
+            "weight_decay": args.weight_decay,
+            "lr": args.learning_rate * 10 if args.cls_learning_rate == 0 else args.cls_learning_rate,
+        },
+        {
+            "params": [p for n, p in model.cls.named_parameters() if any(nd in n for nd in no_decay)],
+            "weight_decay": 0.0,
+            "lr": args.learning_rate * 10 if args.cls_learning_rate == 0 else args.cls_learning_rate,
+        },
+    ]
     optimizer = AdamW(optimizer_grouped_parameters, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
@@ -205,7 +164,7 @@ def train(args, config, train_dataset, model, eval_dataset=None):
 
     global_step = 0
     tr_loss, logging_loss = 0.0, 0.0
-    tr_acc, logging_acc = 0.0, 0.0
+    tr_map, logging_map = 0.0, 0.0
     model.zero_grad()
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0])
     set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
@@ -213,15 +172,19 @@ def train(args, config, train_dataset, model, eval_dataset=None):
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
             (
-                _,
+                table_id,
                 input_tok,
                 input_tok_type,
                 input_tok_pos,
                 input_tok_mask,
                 input_ent_text,
                 input_ent_text_length,
+                input_ent,
                 input_ent_type,
                 input_ent_mask,
+                column_entity_mask,
+                column_header_mask,
+                labels_mask,
                 labels,
             ) = batch
             input_tok = input_tok.to(args.device)
@@ -230,11 +193,44 @@ def train(args, config, train_dataset, model, eval_dataset=None):
             input_tok_mask = input_tok_mask.to(args.device)
             input_ent_text = input_ent_text.to(args.device)
             input_ent_text_length = input_ent_text_length.to(args.device)
+            input_ent = input_ent.to(args.device)
             input_ent_type = input_ent_type.to(args.device)
             input_ent_mask = input_ent_mask.to(args.device)
+            column_entity_mask = column_entity_mask.to(args.device)
+            column_header_mask = column_header_mask.to(args.device)
+            labels_mask = labels_mask.to(args.device)
             labels = labels.to(args.device)
             model.train()
-            # pdb.set_trace()
+            if args.mode == 1:
+                input_ent_mask = input_ent_mask[:, :, input_tok_mask.shape[1] :]
+                input_tok = None
+                input_tok_type = None
+                input_tok_pos = None
+                input_tok_mask = None
+            elif args.mode == 2:
+                input_tok_mask = input_tok_mask[:, :, : input_tok_mask.shape[1]]
+                input_ent_text = None
+                input_ent_text_length = None
+                input_ent = None
+                input_ent_type = None
+                input_ent_mask = None
+            elif args.mode == 3:
+                input_ent = None
+            elif args.mode == 4:
+                input_ent_mask = input_ent_mask[:, :, input_tok_mask.shape[1] :]
+                input_tok = None
+                input_tok_type = None
+                input_tok_pos = None
+                input_tok_mask = None
+                input_ent = None
+            elif args.mode == 5:
+                input_ent_mask = input_ent_mask[:, :, input_tok_mask.shape[1] :]
+                input_tok = None
+                input_tok_type = None
+                input_tok_pos = None
+                input_tok_mask = None
+                input_ent_text = None
+                input_ent_text_length = None
             outputs = model(
                 input_tok,
                 input_tok_type,
@@ -242,15 +238,20 @@ def train(args, config, train_dataset, model, eval_dataset=None):
                 input_tok_mask,
                 input_ent_text,
                 input_ent_text_length,
+                input_ent,
                 input_ent_type,
                 input_ent_mask,
+                column_entity_mask,
+                column_header_mask,
+                labels_mask,
                 labels,
             )
             # model outputs are always tuple in transformers (see doc)
             loss = outputs[0]
 
             prediction_scores = outputs[1]
-            acc = ((prediction_scores > 0) == labels).float().mean()
+            ap = average_precision(prediction_scores.view(-1, config.class_num), labels.view((-1, config.class_num)))
+            map = (ap * labels_mask.view(-1)).sum() / labels_mask.sum()
 
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel training
@@ -264,7 +265,7 @@ def train(args, config, train_dataset, model, eval_dataset=None):
                 loss.backward()
 
             tr_loss += loss.item()
-            tr_acc += acc.item()
+            tr_map += map.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
                     torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
@@ -280,17 +281,23 @@ def train(args, config, train_dataset, model, eval_dataset=None):
                     if (
                         args.local_rank == -1 and args.evaluate_during_training
                     ):  # Only evaluate when single GPU otherwise metrics may not average well
+                        logger.info("***** Train results *****")
+                        logger.info("  loss = %s", str((tr_loss - logging_loss) / args.logging_steps))
+                        logger.info(
+                            "  map = %s",
+                            str((tr_map - logging_map) / (args.gradient_accumulation_steps * args.logging_steps)),
+                        )
                         results = evaluate(args, config, eval_dataset, model)
                         for key, value in results.items():
                             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
                     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
                     tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
                     tb_writer.add_scalar(
-                        "acc",
-                        (tr_acc - logging_acc) / (args.gradient_accumulation_steps * args.logging_steps),
+                        "map",
+                        (tr_map - logging_map) / (args.gradient_accumulation_steps * args.logging_steps),
                         global_step,
                     )
-                    logging_acc = tr_acc
+                    logging_map = tr_map
                     logging_loss = tr_loss
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
@@ -327,22 +334,14 @@ def evaluate(args, config, eval_dataset, model, prefix=""):
 
     if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(eval_output_dir)
-
-    args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
-    batch_limit = args.eval_batch_size * args.neg_num
-    # Note that DistributedSampler samples randomly
-    eval_sampler = SequentialSampler(eval_dataset) if args.local_rank == -1 else DistributedSampler(eval_dataset)
-    eval_dataloader = TRLoader(
-        eval_dataset,
-        sampler=eval_sampler,
-        batch_size=args.train_batch_size,
-        is_train=False,
-        for_bert=args.model_type == "TR_Bert",
-    )
-
     # multi-gpu evaluate
     if args.n_gpu > 1:
         model = torch.nn.DataParallel(model)
+    model.eval()
+    args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
+    # Note that DistributedSampler samples randomly
+    eval_sampler = SequentialSampler(eval_dataset) if args.local_rank == -1 else DistributedSampler(eval_dataset)
+    eval_dataloader = CTLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size, is_train=False)
 
     # Eval!
     logger.info("***** Running evaluation {} *****".format(prefix))
@@ -350,108 +349,103 @@ def evaluate(args, config, eval_dataset, model, prefix=""):
     logger.info("  Batch size = %d", args.eval_batch_size)
     eval_loss = 0.0
     eval_map = 0.0
-    eval_p_at_1 = 0.0
     nb_eval_steps = 0
-    model.eval()
-    dev_results = [[], [], []]
+
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         (
-            q_ids,
+            table_id,
             input_tok,
             input_tok_type,
             input_tok_pos,
             input_tok_mask,
             input_ent_text,
             input_ent_text_length,
+            input_ent,
             input_ent_type,
             input_ent_mask,
+            column_entity_mask,
+            column_header_mask,
+            labels_mask,
             labels,
         ) = batch
-        total_sample = len(q_ids)
-        i = 0
-        tmp_loss = []
-        while i + batch_limit < total_sample:
-            tmp_input_tok = input_tok[i : i + batch_limit].to(args.device)
-            tmp_input_tok_type = input_tok_type[i : i + batch_limit].to(args.device)
-            tmp_input_tok_pos = input_tok_pos[i : i + batch_limit].to(args.device)
-            tmp_input_tok_mask = input_tok_mask[i : i + batch_limit].to(args.device)
-            tmp_input_ent_text = input_ent_text[i : i + batch_limit].to(args.device)
-            tmp_input_ent_text_length = input_ent_text_length[i : i + batch_limit].to(args.device)
-            tmp_input_ent_type = input_ent_type[i : i + batch_limit].to(args.device)
-            tmp_input_ent_mask = input_ent_mask[i : i + batch_limit].to(args.device)
-            tmp_labels = labels[i : i + batch_limit].to(args.device)
+        input_tok = input_tok.to(args.device)
+        input_tok_type = input_tok_type.to(args.device)
+        input_tok_pos = input_tok_pos.to(args.device)
+        input_tok_mask = input_tok_mask.to(args.device)
+        input_ent_text = input_ent_text.to(args.device)
+        input_ent_text_length = input_ent_text_length.to(args.device)
+        input_ent = input_ent.to(args.device)
+        input_ent_type = input_ent_type.to(args.device)
+        input_ent_mask = input_ent_mask.to(args.device)
+        column_entity_mask = column_entity_mask.to(args.device)
+        column_header_mask = column_header_mask.to(args.device)
+        labels_mask = labels_mask.to(args.device)
+        labels = labels.to(args.device)
+        if args.mode == 1:
+            input_ent_mask = input_ent_mask[:, :, input_tok_mask.shape[1] :]
+            input_tok = None
+            input_tok_type = None
+            input_tok_pos = None
+            input_tok_mask = None
+        elif args.mode == 2:
+            input_tok_mask = input_tok_mask[:, :, : input_tok_mask.shape[1]]
+            input_ent_text = None
+            input_ent_text_length = None
+            input_ent = None
+            input_ent_type = None
+            input_ent_mask = None
+        elif args.mode == 3:
+            input_ent = None
+        elif args.mode == 4:
+            input_ent_mask = input_ent_mask[:, :, input_tok_mask.shape[1] :]
+            input_tok = None
+            input_tok_type = None
+            input_tok_pos = None
+            input_tok_mask = None
+            input_ent = None
+        elif args.mode == 5:
+            input_ent_mask = input_ent_mask[:, :, input_tok_mask.shape[1] :]
+            input_tok = None
+            input_tok_type = None
+            input_tok_pos = None
+            input_tok_mask = None
+            input_ent_text = None
+            input_ent_text_length = None
+        with torch.no_grad():
+            outputs = model(
+                input_tok,
+                input_tok_type,
+                input_tok_pos,
+                input_tok_mask,
+                input_ent_text,
+                input_ent_text_length,
+                input_ent,
+                input_ent_type,
+                input_ent_mask,
+                column_entity_mask,
+                column_header_mask,
+                labels_mask,
+                labels,
+            )
+            loss = outputs[0]
+            prediction_scores = outputs[1]
             # pdb.set_trace()
-            with torch.no_grad():
-                outputs = model(
-                    tmp_input_tok,
-                    tmp_input_tok_type,
-                    tmp_input_tok_pos,
-                    tmp_input_tok_mask,
-                    tmp_input_ent_text,
-                    tmp_input_ent_text_length,
-                    tmp_input_ent_type,
-                    tmp_input_ent_mask,
-                    tmp_labels,
-                )
-                loss = outputs[0]
-                prediction_scores = outputs[1].view(-1)
-                tmp_loss.append(loss.mean().item())
-                dev_results[1] += prediction_scores.tolist()
-            i += batch_limit
-        if i <= total_sample:
-            tmp_input_tok = input_tok[i:].to(args.device)
-            tmp_input_tok_type = input_tok_type[i:].to(args.device)
-            tmp_input_tok_pos = input_tok_pos[i:].to(args.device)
-            tmp_input_tok_mask = input_tok_mask[i:].to(args.device)
-            tmp_input_ent_text = input_ent_text[i:].to(args.device)
-            tmp_input_ent_text_length = input_ent_text_length[i:].to(args.device)
-            tmp_input_ent_type = input_ent_type[i:].to(args.device)
-            tmp_input_ent_mask = input_ent_mask[i:].to(args.device)
-            tmp_labels = labels[i:].to(args.device)
-            # pdb.set_trace()
-            with torch.no_grad():
-                outputs = model(
-                    tmp_input_tok,
-                    tmp_input_tok_type,
-                    tmp_input_tok_pos,
-                    tmp_input_tok_mask,
-                    tmp_input_ent_text,
-                    tmp_input_ent_text_length,
-                    tmp_input_ent_type,
-                    tmp_input_ent_mask,
-                    tmp_labels,
-                )
-                loss = outputs[0]
-                prediction_scores = outputs[1].view(-1)
-                tmp_loss.append(loss.mean().item())
-                dev_results[1] += prediction_scores.tolist()
-        dev_results[0] += q_ids
-        dev_results[2] += labels.tolist()
-        eval_loss += np.mean(tmp_loss)
+            ap = average_precision(prediction_scores.view(-1, config.class_num), labels.view((-1, config.class_num)))
+            map = (ap * labels_mask.view(-1)).sum() / labels_mask.sum()
+            eval_loss += loss.mean().item()
+            eval_map += map.item()
         nb_eval_steps += 1
-        # pdb.set_trace()
-    dev_scores = {}
-    for i, q_id in enumerate(dev_results[0]):
-        if q_id not in dev_scores:
-            dev_scores[q_id] = []
-        dev_scores[q_id].append([dev_results[1][i], dev_results[2][i]])
-    dev_sorted_labels = [
-        [z[1] for z in sorted(value, key=lambda x: x[0], reverse=True)] for _, value in dev_scores.items()
-    ]
-    eval_p_at_1 = np.mean([precision_at_k(x, 1) for x in dev_sorted_labels])
-    eval_map = mean_average_precision(dev_sorted_labels)
 
     eval_loss = eval_loss / nb_eval_steps
+    eval_map = eval_map / nb_eval_steps
 
-    result = {"eval_loss": eval_loss, "eval_p_1": eval_p_at_1, "eval_map": eval_map}
-
-    output_eval_file = os.path.join(eval_output_dir, prefix, "eval_results.txt")
-    with open(output_eval_file, "w") as writer:
-        logger.info("***** Eval results {} *****".format(prefix))
-        for key in sorted(result.keys()):
-            logger.info("  %s = %s", key, str(result[key]))
-            writer.write("%s = %s\n" % (key, str(result[key])))
-
+    result = {
+        "eval_loss": eval_loss,
+        "eval_map": eval_map,
+    }
+    logger.info("***** Eval results {} *****".format(prefix))
+    for key in sorted(result.keys()):
+        logger.info("  %s = %s", key, str(result[key]))
     return result
 
 
@@ -476,8 +470,7 @@ def main():
         type=str,
         help="The model checkpoint for weights initialization.",
     )
-
-    parser.add_argument("--neg_num", default=5, type=int)
+    parser.add_argument("--mode", default=0, type=int, help="0: use both;1: use table;2: use entity")
 
     parser.add_argument(
         "--config_name",
@@ -507,7 +500,6 @@ def main():
     )
     parser.add_argument("--do_train", action="store_true", help="Whether to run training.")
     parser.add_argument("--do_eval", action="store_true", help="Whether to run eval on the dev set.")
-    parser.add_argument("--get_table_repr", action="store_true", help="get representation of training tables")
     parser.add_argument(
         "--evaluate_during_training", action="store_true", help="Run evaluation during training at each logging step."
     )
@@ -522,6 +514,7 @@ def main():
         help="Number of updates steps to accumulate before performing a backward/update pass.",
     )
     parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.")
+    parser.add_argument("--cls_learning_rate", default=0, type=float, help="The initial learning rate for cls layer.")
     parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight deay if we apply some.")
     parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
@@ -634,18 +627,16 @@ def main():
         args.config_name if args.config_name else args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-
+    type_vocab = load_type_vocab(args.data_dir)
+    config.class_num = len(type_vocab)
+    config.mode = args.mode
     model = model_class(config, is_simple=True)
     if args.do_train:
-        lm_checkpoints = list(
-            os.path.dirname(c)
-            for c in sorted(glob.glob(args.model_name_or_path + "/**/" + WEIGHTS_NAME, recursive=True))
-        )
-        logger.info("load pre-trained model from %s", lm_checkpoints[-1])
-        lm_checkpoint = torch.load(os.path.join(lm_checkpoints[-1], "pytorch_model.bin"))
+        # lm_checkpoints = list(os.path.dirname(c) for c in sorted(glob.glob(args.model_name_or_path + '/**/' + WEIGHTS_NAME, recursive=True)))
+        # logger.info("load pre-trained model from %s", lm_checkpoints[-1])
+        # lm_checkpoint = torch.load(os.path.join(lm_checkpoints[-1],"pytorch_model.bin"))
+        lm_checkpoint = torch.load(os.path.join(args.model_name_or_path, "pytorch_model.bin"))
         model.load_pretrained(lm_checkpoint)
-        if args.model_type != "TR_Bert":
-            model.resize_type_embedding()
         model.to(args.device)
 
     if args.local_rank == 0:
@@ -657,24 +648,27 @@ def main():
     if args.do_train:
         if args.local_rank not in [-1, 0]:
             torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training process the dataset, and the others will use the cache
-
-        train_dataset = WebQueryTableDataset(
+        entity_vocab = load_entity_vocab(args.data_dir, ignore_bad_title=True, min_ent_count=2)
+        train_dataset = WikiCTDataset(
             args.data_dir,
+            entity_vocab,
+            type_vocab,
             max_input_tok=500,
-            src="train",
-            max_length=[100, 50, 10, 10],
+            src="wiki_train10mix",
+            max_length=[50, 10, 10],
             force_new=False,
-            for_bert=args.model_type == "TR_Bert",
+            tokenizer=None,
         )
-        eval_dataset = WebQueryTableDataset(
+        eval_dataset = WikiCTDataset(
             args.data_dir,
+            entity_vocab,
+            type_vocab,
             max_input_tok=500,
-            src="test",
-            max_length=[100, 50, 10, 10],
+            src="wiki_test90",
+            max_length=[50, 10, 10],
             force_new=False,
-            for_bert=args.model_type == "TR_Bert",
+            tokenizer=None,
         )
-
         assert config.vocab_size == len(train_dataset.tokenizer), "vocab size mismatch, vocab_size=%d" % (
             len(train_dataset.tokenizer)
         )
@@ -725,13 +719,6 @@ def main():
             result = evaluate(args, config, eval_dataset, model, prefix=prefix)
             result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
             results.update(result)
-
-    # if args.get_table_repr:
-    #     train_dataset = WikiEntityTableDataset(args.data_dir,entity_vocab,max_cell=100, max_input_tok=350, max_input_ent=150, src="train", max_length = [50, 10, 10], force_new=False, tokenizer = None, mode=1)
-    #     checkpoint = torch.load(args.model_name_or_path)
-    #     model.load_state_dict(checkpoint)
-    #     model.to(args.device)
-    #     get_table_repr(args, config, train_dataset, model)
 
     return results
 

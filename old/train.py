@@ -4,12 +4,12 @@ import collections
 import numpy as np
 import torch
 
-import data_loader.data_loaders as module_data
-import model.loss as module_loss
-import model.metric as module_metric
-import model.model as module_arch
+import src.data_loader.data_loaders as module_data
+import src.model.loss as module_loss
+import src.model.metric as module_metric
+import src.model.model as module_arch
 from parse_config import ConfigParser
-from trainer import Trainer
+from src.trainer import Trainer
 
 # fix random seeds for reproducibility
 SEED = 123

@@ -7,21 +7,15 @@ import pickle
 
 import numpy as np
 import torch
-
-try:
-    pass
-except:
-    pass
-
 from tqdm import tqdm
 from transformers.models.bert.tokenization_bert import BertTokenizer
 
-from baselines.cell_filling.cell_filling import *
-from baselines.row_population.metric import average_precision, ndcg_at_k
-from data_loader.hybrid_data_loaders import *
-from model.configuration import TableConfig
-from model.model import HybridTableCER, HybridTableMaskedLM
-from utils.util import *
+from src.baselines.cell_filling.cell_filling import *
+from src.baselines.row_population.metric import average_precision, ndcg_at_k
+from src.data_loader.hybrid_data_loaders import *
+from src.model.configuration import TableConfig
+from src.model.model import HybridTableCER, HybridTableMaskedLM
+from src.utils.util import *
 
 logger = logging.getLogger(__name__)
 

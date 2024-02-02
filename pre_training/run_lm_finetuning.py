@@ -56,7 +56,7 @@ from transformers import (
     get_linear_schedule_with_warmup,
 )
 
-from data_loader.data_loaders import TableLoader, WikiTableDataset
+from src.data_loader.data_loaders import TableLoader, WikiTableDataset
 
 logger = logging.getLogger(__name__)
 
