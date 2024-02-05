@@ -97,7 +97,7 @@ def train(
     sample_distribution: np.ndarray | None = None,
 ):
     """Train the model"""
-    args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
+    args.train_batch_size = args.per_gpu_train_batch_size  # * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
     train_dataloader = HybridTableLoader(
         train_dataset,
@@ -172,7 +172,6 @@ def train(
     model.zero_grad(set_to_none=True)
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0])
     for _ in train_iterator:
-        model.train()
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
             (
@@ -286,6 +285,10 @@ def train(
                             sample_distribution=None,
                             log_dir=tb_logger.log_dir,
                         )
+                        # Put model back to training mode
+                        model.train()
+
+                        # Log metrics with TensorBoard
                         for key, value in results.items():
                             tb_logger.log_metrics({"eval/{}".format(key): value}, global_step)
                     logging_loss = tr_loss
@@ -358,7 +361,7 @@ def evaluate(
     if args.local_rank in {-1, 0}:
         os.makedirs(os.path.dirname(output_eval_file), exist_ok=True)
 
-    args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
+    args.eval_batch_size = args.per_gpu_eval_batch_size  # * max(1, args.n_gpu)
     eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = HybridTableLoader(
         eval_dataset,

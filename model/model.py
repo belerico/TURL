@@ -1103,8 +1103,8 @@ class HybridTableMaskedLM(BertPreTrainedModel):
         if tok_output_embeddings is not None:
             self._tie_or_clone_weights(tok_output_embeddings, tok_input_embeddings)
 
-    def load_pretrained(self, checkpoint, is_bert=True):
-        self.table.load_pretrained(checkpoint, is_bert)
+    def load_pretrained(self, checkpoint):
+        self.table.load_pretrained(checkpoint)
         self.cls.load_pretrained(checkpoint)
 
     def forward(
