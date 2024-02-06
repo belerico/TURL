@@ -182,6 +182,7 @@ def train(
     tok_tr_loss, tok_logging_loss, ent_tr_loss, ent_logging_loss = 0.0, 0.0, 0.0, 0.0
 
     set_seed(args)
+    model.train()
     model.zero_grad(set_to_none=True)
     optimizer.zero_grad(set_to_none=True)
 
