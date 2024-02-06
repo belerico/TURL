@@ -1,8 +1,9 @@
 torch>=2.0
 lightning>=2.0
 tqdm
-tensorboard
-transformers
-pandas
+tensorboard==2.15.1
+transformers==4.37.2
+pandas==2.2.0
 boto3
 jsonlines
+pyarrow==15.0.0
