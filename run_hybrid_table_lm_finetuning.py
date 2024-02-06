@@ -831,6 +831,8 @@ def main():
     )
     parser.add_argument("--dry_run", action="store_true", help="Sanity checks for training.")
     parser.add_argument("--local-rank", type=int, default=-1, help="For distributed training: local_rank")
+    parser.add_argument("--allow_tf32", action="store_true", help="Allow the use of TF32 on NVIDIA Ampere GPUs")
+
     args = parser.parse_args()
     args.data_dir = os.path.expanduser(args.data_dir)
 
@@ -845,6 +847,10 @@ def main():
                 args.output_dir
             )
         )
+
+    if args.allow_tf32:
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cuda.matmul.allow_tf32 = True
 
     # Setup CUDA, GPU & distributed training
     if args.local_rank == -1 or args.no_cuda:
