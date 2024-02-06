@@ -25,9 +25,6 @@ import argparse
 import glob
 import logging
 import os
-import random
-import re
-import shutil
 from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
@@ -37,6 +34,7 @@ import torch
 import torch.distributed as dist
 from data_loader.data_loaders import EntityTableLoader, WikiEntityTableDataset
 from data_loader.hybrid_data_loaders import HybridTableLoader, WikiHybridTableDataset
+from lightning import seed_everything
 from lightning.fabric.loggers import TensorBoardLogger
 from model.configuration import TableConfig
 from model.metric import accuracy, mean_average_precision, mean_rank, top_k_acc
@@ -50,49 +48,12 @@ from utils.util import (
     generate_vocab_distribution,
     get_linear_schedule_with_warmup,
     load_entity_vocab,
+    rotate_checkpoints,
 )
 
 from model.model import HybridTableMaskedLM
 
 logger = logging.getLogger(__name__)
-
-
-def set_seed(args):
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-
-
-def _rotate_checkpoints(args, checkpoint_prefix, use_mtime=False, log_dir: str = None):
-    if not args.save_total_limit:
-        return
-    if args.save_total_limit <= 0:
-        return
-
-    # Check if we should delete older checkpoint(s)
-    glob_checkpoints = glob.glob(
-        os.path.join(args.output_dir if log_dir is None else log_dir, "{}-*".format(checkpoint_prefix))
-    )
-    if len(glob_checkpoints) <= args.save_total_limit:
-        return
-
-    ordering_and_checkpoint_path = []
-    for path in glob_checkpoints:
-        if use_mtime:
-            ordering_and_checkpoint_path.append((os.path.getmtime(path), path))
-        else:
-            regex_match = re.match(".*{}-([0-9]+)".format(checkpoint_prefix), path)
-            if regex_match and regex_match.groups():
-                ordering_and_checkpoint_path.append((int(regex_match.groups()[0]), path))
-
-    checkpoints_sorted = sorted(ordering_and_checkpoint_path)
-    checkpoints_sorted = [checkpoint[1] for checkpoint in checkpoints_sorted]
-    number_of_checkpoints_to_delete = max(0, len(checkpoints_sorted) - args.save_total_limit)
-    checkpoints_to_be_deleted = checkpoints_sorted[:number_of_checkpoints_to_delete]
-    for checkpoint in checkpoints_to_be_deleted:
-        logger.info("Deleting older checkpoint [{}] due to args.save_total_limit".format(checkpoint))
-        shutil.rmtree(checkpoint)
 
 
 def train(
@@ -181,7 +142,6 @@ def train(
     tr_loss, logging_loss = 0.0, 0.0
     tok_tr_loss, tok_logging_loss, ent_tr_loss, ent_logging_loss = 0.0, 0.0, 0.0, 0.0
 
-    set_seed(args)
     model.train()
     model.zero_grad(set_to_none=True)
     optimizer.zero_grad(set_to_none=True)
@@ -359,7 +319,7 @@ def train(
                     logger.info("Saving model checkpoint to %s", output_dir)
 
                     # Remove older checkpoints
-                    _rotate_checkpoints(args, "checkpoint", log_dir=tb_logger.log_dir)
+                    rotate_checkpoints(args, "checkpoint", log_dir=tb_logger.log_dir)
 
                 # Possibly wait for rank-0 to log metrics and save model
                 dist.barrier()
@@ -923,7 +883,7 @@ def main():
     )
 
     # Set seed
-    set_seed(args)
+    seed_everything(args.seed)
 
     # Get model configuration
     config = TableConfig.from_pretrained(
