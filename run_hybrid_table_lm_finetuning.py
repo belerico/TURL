@@ -287,7 +287,7 @@ def train(
                 scaler.unscale_(optimizer)
 
                 # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
                 # Optimizer and scheduler update
                 scaler.step(optimizer)
@@ -326,6 +326,7 @@ def train(
                             "train/loss": (tr_loss - logging_loss) / args.logging_steps,
                             "train/tok_loss": (tok_tr_loss - tok_logging_loss) / args.logging_steps,
                             "train/ent_loss": (ent_tr_loss - ent_logging_loss) / args.logging_steps,
+                            "train/grad_norm": grad_norm,
                         },
                         global_step,
                     )
