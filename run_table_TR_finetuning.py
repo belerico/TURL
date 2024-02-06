@@ -39,15 +39,15 @@ try:
 except:
     from tensorboardX import SummaryWriter
 
+from data_loader.data_loaders import *
+from data_loader.tr_data_loaders import *
+from model.configuration import TableConfig
+from model.transformers import WEIGHTS_NAME, AdamW, BertTokenizer, get_linear_schedule_with_warmup
 from tqdm import tqdm, trange
+from utils.util import *
 
 from baselines.row_population.metric import *
-from data_loader.data_loaders import *
-from data_loader.TR_data_loaders import *
-from model.configuration import TableConfig
 from model.model import BertTR, HybridTableTR
-from model.transformers import WEIGHTS_NAME, AdamW, BertTokenizer, get_linear_schedule_with_warmup
-from utils.util import *
 
 logger = logging.getLogger(__name__)
 

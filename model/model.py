@@ -21,9 +21,6 @@ import logging
 import sys
 
 import torch
-from torch import nn
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MultiLabelSoftMarginLoss
-
 from model.transformers.modeling_bert import (
     ACT2FN,
     BertAttention,
@@ -37,6 +34,8 @@ from model.transformers.modeling_bert import (
     BertPredictionHeadTransform,
     BertPreTrainedModel,
 )
+from torch import nn
+from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MultiLabelSoftMarginLoss
 
 logger = logging.getLogger(__name__)
 
@@ -1677,11 +1676,9 @@ class HybridTableEL(BertPreTrainedModel):
         #    of predictions for masked words.
         # 2. If `lm_labels` is provided we are in a causal scenario where we
         #    try to predict the next token for each input in the decoder.
-        # pdb.set_trace()
         if labels is not None:
             loss_fct = CrossEntropyLoss(ignore_index=-1)  # -1 index = padding token
 
             el_loss = loss_fct(ent_prediction_scores, labels.view(-1))
             ent_outputs = (el_loss,) + ent_outputs
-        # pdb.set_trace()
         return ent_outputs  # (masked_lm_loss), (ltr_lm_loss), prediction_scores, (hidden_states), (attentions)

@@ -39,14 +39,14 @@ try:
 except:
     from tensorboardX import SummaryWriter
 
-from tqdm import tqdm, trange
-
 from data_loader.data_loaders import *
-from data_loader.RE_data_loaders import *
+from data_loader.re_data_loaders import *
 from model.metric import *
-from model.model import BertRE
 from model.transformers import WEIGHTS_NAME, AdamW, BertConfig, BertTokenizer, get_linear_schedule_with_warmup
+from tqdm import tqdm, trange
 from utils.util import *
+
+from model.model import BertRE
 
 logger = logging.getLogger(__name__)
 

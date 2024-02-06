@@ -2,11 +2,10 @@ import pdb
 
 import numpy as np
 import torch
-
-from data_loader.CT_Wiki_data_loaders import *
+from data_loader.ct_wiki_data_loaders import *
 from data_loader.data_loaders import *
 from data_loader.hybrid_data_loaders import *
-from data_loader.TR_data_loaders import *
+from data_loader.tr_data_loaders import *
 from utils.util import *
 
 if __name__ == "__main__":

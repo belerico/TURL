@@ -13,15 +13,15 @@ try:
 except:
     pass
 
+from data_loader.hybrid_data_loaders import *
+from model.configuration import TableConfig
 from tqdm import tqdm
+from transformers import BertTokenizer
+from utils.util import *
 
 from baselines.cell_filling.cell_filling import *
 from baselines.row_population.metric import average_precision, ndcg_at_k
-from data_loader.hybrid_data_loaders import *
-from model.configuration import TableConfig
 from model.model import HybridTableCER, HybridTableMaskedLM
-from model.transformers import BertTokenizer
-from utils.util import *
 
 logger = logging.getLogger(__name__)
 

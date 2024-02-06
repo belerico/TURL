@@ -10,8 +10,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-
-from model.transformers import BertTokenizer
+from transformers import BertTokenizer
 
 RESERVED_HEADER_VOCAB = {0: "[PAD]", 1: "[MASK]"}
 

@@ -39,16 +39,16 @@ try:
 except:
     from tensorboardX import SummaryWriter
 
-from tqdm import tqdm, trange
-
 from data_loader.data_loaders import *
-from data_loader.RE_data_loaders import *
+from data_loader.re_data_loaders import *
 from model.configuration import TableConfig
 from model.metric import *
-from model.model import HybridTableRE
 from model.optim import DenseSparseAdam
 from model.transformers import WEIGHTS_NAME, BertTokenizer, get_linear_schedule_with_warmup
+from tqdm import tqdm, trange
 from utils.util import *
+
+from model.model import HybridTableRE
 
 logger = logging.getLogger(__name__)
 
