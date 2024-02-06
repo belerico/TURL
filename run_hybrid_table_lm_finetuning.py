@@ -28,6 +28,7 @@ import os
 import random
 import re
 import shutil
+from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
 
@@ -43,8 +44,13 @@ from model.optim import DenseSparseAdam
 from torch.utils.data import Dataset, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
-from transformers import WEIGHTS_NAME, get_linear_schedule_with_warmup
-from utils.util import create_ent_embedding, generate_vocab_distribution, load_entity_vocab
+from transformers import WEIGHTS_NAME
+from utils.util import (
+    create_ent_embedding,
+    generate_vocab_distribution,
+    get_linear_schedule_with_warmup,
+    load_entity_vocab,
+)
 
 from model.model import HybridTableMaskedLM
 
@@ -98,7 +104,6 @@ def train(
     eval_dataset: Dataset | None = None,
     sample_distribution: np.ndarray | None = None,
 ):
-    """Train the model"""
     args.train_batch_size = args.per_gpu_train_batch_size
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
     train_dataloader = HybridTableLoader(
@@ -124,7 +129,7 @@ def train(
     else:
         t_total = steps_per_epoch * args.num_train_epochs
 
-    # Prepare optimizer and schedule (linear warmup and decay)
+    # Prepare optimizer and scheduler (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
@@ -135,7 +140,11 @@ def train(
     ]
     optimizer = DenseSparseAdam(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=args.warmup_epochs * steps_per_epoch, num_training_steps=t_total
+        optimizer,
+        num_warmup_steps=args.warmup_epochs * steps_per_epoch,
+        num_training_steps=t_total,
+        init_lrs=args.learning_rate,
+        lrs_after_warmup=args.scaled_learning_rate,
     )
     scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
     if args.resume != "":
@@ -149,7 +158,7 @@ def train(
         global_step = 0
 
     # Distributed training (should be after apex fp16 initialization)
-    if args.local_rank != -1:
+    if dist.is_available() and dist.is_initialized():
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=False
         )
@@ -174,10 +183,19 @@ def train(
 
     set_seed(args)
     model.zero_grad(set_to_none=True)
+    optimizer.zero_grad(set_to_none=True)
+
+    # Log first learning rate
+    if args.local_rank in {-1, 0} and args.logging_steps > 0:
+        tb_logger.log_metrics({"train/lr": scheduler.get_last_lr()[0]}, global_step)
+
+    # Train loop
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in {-1, 0})
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in {-1, 0})
         for step, batch in enumerate(epoch_iterator):
+            is_accumulating = (step + 1) % args.gradient_accumulation_steps != 0
+
             (
                 _,
                 input_tok,
@@ -218,48 +236,53 @@ def train(
                 if args.exclusive_ent == 2:  # mask only core entity
                     exclusive_ent_mask += (~core_entity_mask[:, :, None]).long() * 1000
 
-            with torch.autocast(
-                device_type="cuda" if str(args.device).startswith("cuda") else "cpu",
-                dtype=torch.float16,
-                enabled=args.fp16,
-            ):
-                tok_outputs, ent_outputs = model(
-                    input_tok,
-                    input_tok_type,
-                    input_tok_pos,
-                    input_tok_mask,
-                    input_ent_text,
-                    input_ent_text_length,
-                    input_ent_mask_type,
-                    input_ent,
-                    input_ent_type,
-                    input_ent_mask,
-                    candidate_entity_set,
-                    input_tok_labels,
-                    input_ent_labels,
-                    exclusive_ent_mask,
-                )
-                tok_loss = tok_outputs[0]  # model outputs are always tuple in transformers (see doc)
-                ent_loss = ent_outputs[0]
-                loss = tok_loss + ent_loss
+            # Do not sync gradients between processes if we are accumulating
+            no_backward_sync_ctx = nullcontext()
+            if is_accumulating and dist.is_available() and dist.is_initialized():
+                no_backward_sync_ctx = model.no_sync()
+            with no_backward_sync_ctx:
+                with torch.autocast(
+                    device_type="cuda" if str(args.device).startswith("cuda") else "cpu",
+                    dtype=torch.float16,
+                    enabled=args.fp16,
+                ):
+                    tok_outputs, ent_outputs = model(
+                        input_tok,
+                        input_tok_type,
+                        input_tok_pos,
+                        input_tok_mask,
+                        input_ent_text,
+                        input_ent_text_length,
+                        input_ent_mask_type,
+                        input_ent,
+                        input_ent_type,
+                        input_ent_mask,
+                        candidate_entity_set,
+                        input_tok_labels,
+                        input_ent_labels,
+                        exclusive_ent_mask,
+                    )
+                    tok_loss = tok_outputs[0]  # model outputs are always tuple in transformers (see doc)
+                    ent_loss = ent_outputs[0]
+                    loss = tok_loss + ent_loss
 
-            loss = loss.mean()
-            tok_loss = tok_loss.mean()
-            ent_loss = ent_loss.mean()
-            if args.gradient_accumulation_steps > 1:
-                loss = loss / args.gradient_accumulation_steps
-                tok_loss = tok_loss / args.gradient_accumulation_steps
-                ent_loss = ent_loss / args.gradient_accumulation_steps
+                # Loss reduction
+                loss = loss.mean()
+                tok_loss = tok_loss.mean()
+                ent_loss = ent_loss.mean()
+                if args.gradient_accumulation_steps > 1:
+                    loss = loss / args.gradient_accumulation_steps
+                    tok_loss = tok_loss / args.gradient_accumulation_steps
+                    ent_loss = ent_loss / args.gradient_accumulation_steps
 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+                # Scaled loss backward for mixed precision training
+                scaler.scale(loss).backward()
 
             tr_loss += loss.item()
             tok_tr_loss += tok_loss.item()
             ent_tr_loss += ent_loss.item()
 
-            if (step + 1) % args.gradient_accumulation_steps == 0:
+            if not is_accumulating:
                 # Unscales the gradients of optimizer's assigned params in-place
                 scaler.unscale_(optimizer)
 
@@ -861,14 +884,6 @@ def main():
             )
         )
 
-    # Linear scale the learning rate
-    if args.linear_scale_lr:
-        args.learning_rate = (
-            1e-4
-            * float(args.per_gpu_train_batch_size * dist.get_world_size() * args.gradient_accumulation_steps)
-            / 50.0
-        )
-
     # Setup CUDA, GPU & distributed training
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
@@ -879,6 +894,16 @@ def main():
         dist.init_process_group(backend="nccl")
         args.n_gpu = dist.get_world_size()
     args.device = device
+
+    # Linear scale the learning rate
+    if args.linear_scale_lr:
+        args.scaled_learning_rate = (
+            1e-4
+            * float(args.per_gpu_train_batch_size * dist.get_world_size() * args.gradient_accumulation_steps)
+            / 50.0
+        )
+    else:
+        args.scaled_learning_rate = args.learning_rate
 
     # Setup logging
     logging.basicConfig(

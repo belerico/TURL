@@ -2,13 +2,16 @@ import copy
 import json
 import os
 import pickle
+import warnings
 from collections import OrderedDict
+from functools import partial
 from itertools import repeat
 from pathlib import Path
 from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
+from torch.optim.lr_scheduler import LambdaLR
 from tqdm import tqdm
 
 
@@ -151,3 +154,85 @@ def load_dbpedia_type_vocab(data_dir):
             index, t = line.strip().split("\t")
             type_vocab[t] = int(index)
     return type_vocab
+
+
+def _get_linear_schedule_with_warmup_lr_lambda(current_step: int, *, num_warmup_steps: int, num_training_steps: int):
+    if current_step < num_warmup_steps:
+        return float(current_step) / float(max(1, num_warmup_steps))
+    return max(0.0, float(num_training_steps - current_step) / float(max(1, num_training_steps - num_warmup_steps)))
+
+
+def _get_linear_schedule_with_warmup_from_init_to_warmup_lr_lambda(
+    current_step: int, *, num_warmup_steps: int, num_training_steps: int, init_lr: float, final_lr: float
+):
+    if current_step < num_warmup_steps:
+        return (final_lr - init_lr) / float(num_warmup_steps) * float(current_step) + init_lr
+    return max(
+        0.0,
+        final_lr * (1 - float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))),
+    )
+
+
+def get_linear_schedule_with_warmup(
+    optimizer, num_warmup_steps, num_training_steps, last_epoch=-1, init_lrs=None, lrs_after_warmup=None
+):
+    """
+    Create a schedule with a learning rate that decreases linearly from the initial lr set in the optimizer to 0, after
+    a warmup period during which it increases linearly from 0 to the initial lr set in the optimizer.
+
+    Args:
+        optimizer ([`~torch.optim.Optimizer`]):
+            The optimizer for which to schedule the learning rate.
+        num_warmup_steps (`int`):
+            The number of steps for the warmup phase.
+        num_training_steps (`int`):
+            The total number of training steps.
+        last_epoch (`int`, *optional*, defaults to -1):
+            The index of the last epoch when resuming training.
+
+    Return:
+        `torch.optim.lr_scheduler.LambdaLR` with the appropriate schedule.
+    """
+    if lrs_after_warmup is None:
+        lr_lambdas = partial(
+            _get_linear_schedule_with_warmup_lr_lambda,
+            num_warmup_steps=num_warmup_steps,
+            num_training_steps=num_training_steps,
+        )
+    else:
+        if init_lrs is None:
+            init_lrs_per_group = [copy.deepcopy(param_group["lr"]) for param_group in optimizer.param_groups]
+        elif not isinstance(init_lrs, (list, tuple)):
+            init_lrs_per_group = [init_lrs for _ in optimizer.param_groups]
+        else:
+            if len(init_lrs) != len(optimizer.param_groups):
+                raise ValueError(
+                    f"Expected {len(optimizer.param_groups)} initial learning rates, but got {len(init_lrs)}"
+                )
+            init_lrs_per_group = init_lrs
+        if not isinstance(lrs_after_warmup, (list, tuple)):
+            lrs_after_warmup = [lrs_after_warmup for _ in optimizer.param_groups]
+        else:
+            if len(lrs_after_warmup) != len(init_lrs_per_group):
+                raise ValueError(
+                    f"Expected {len(init_lrs_per_group)} lrs to reach after warmup, but got {len(lrs_after_warmup)}"
+                )
+        warnings.warn(
+            "Setting the learning rate of every param group to 1.0. This is done to simplify the learning rate scheduling code.",
+            UserWarning,
+        )
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = 1.0
+        lr_lambdas = [
+            (
+                partial(
+                    _get_linear_schedule_with_warmup_from_init_to_warmup_lr_lambda,
+                    num_warmup_steps=num_warmup_steps,
+                    num_training_steps=num_training_steps,
+                    init_lr=init_lr,
+                    final_lr=final_lr,
+                )
+            )
+            for init_lr, final_lr in zip(init_lrs_per_group, lrs_after_warmup)
+        ]
+    return LambdaLR(optimizer, lr_lambdas, last_epoch)
