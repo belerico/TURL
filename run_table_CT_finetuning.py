@@ -22,11 +22,11 @@ using a masked language modeling (MLM) loss.
 from __future__ import absolute_import, annotations, division, print_function
 
 import argparse
-import datetime
 import glob
 import logging
 import os
 from contextlib import nullcontext
+from datetime import datetime
 from typing import Type
 
 import torch
@@ -527,6 +527,7 @@ def main():
     )
     parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.")
     parser.add_argument("--cls_learning_rate", default=0, type=float, help="The initial learning rate for cls layer.")
+    parser.add_argument("--linear_scale_lr", action="store_true", help="Whether to linearly scale learning rate.")
     parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight deay if we apply some.")
     parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
@@ -659,7 +660,7 @@ def main():
     dt_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     # Setup TensorboardLogger
-    tb_logger = TensorBoardLogger(os.path.join(args.output_dir, "logs", "turl", "pre-train"), name=dt_now)
+    tb_logger = TensorBoardLogger(os.path.join(args.output_dir, "logs", "turl", "fine-tuning-ct"), name=dt_now)
     tb_logger.experiment.add_text(
         "CLI arguments",
         "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
@@ -709,7 +710,7 @@ def main():
             entity_vocab,
             type_vocab,
             max_input_tok=500,
-            src="wiki_train10mix",
+            src="train",
             max_length=[50, 10, 10],
             force_new=False,
             tokenizer=None,
@@ -719,7 +720,7 @@ def main():
             entity_vocab,
             type_vocab,
             max_input_tok=500,
-            src="wiki_test90",
+            src="dev",
             max_length=[50, 10, 10],
             force_new=False,
             tokenizer=None,
