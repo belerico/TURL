@@ -8,3 +8,4 @@ boto3
 jsonlines
 scikit-learn==1.4.0
 accelerate==0.26.1
+gensim==4.3.2
