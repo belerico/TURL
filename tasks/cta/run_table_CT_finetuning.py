@@ -38,11 +38,11 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 from transformers import WEIGHTS_NAME, AdamW, get_linear_schedule_with_warmup
 
-from data_loader.ct_wiki_data_loaders import WikiCTDataset
-from model.configuration import TableConfig
-from model.metric import average_precision
-from model.model import HybridTableCT
-from utils.util import load_entity_vocab, load_type_vocab, rotate_checkpoints
+from src.data_loader.ct_wiki_data_loaders import WikiCTDataset
+from src.model.configuration import TableConfig
+from src.model.metric import average_precision
+from src.model.model import HybridTableCT
+from src.utils.util import load_entity_vocab, load_type_vocab, rotate_checkpoints
 
 logger = logging.getLogger(__name__)
 
@@ -688,11 +688,11 @@ def main():
 
     # Get dataloader class
     if args.loader_type == "wikitables":
-        from data_loader.ct_wiki_data_loaders import CTLoader
+        from src.data_loader.ct_wiki_data_loaders import CTLoader
 
         dataloader_cls = CTLoader
     elif args.loader_type == "semtab":
-        from data_loader.ct_semcol_data_loaders import CTLoader
+        from src.data_loader.ct_semcol_data_loaders import CTLoader
 
         dataloader_cls = CTLoader
 

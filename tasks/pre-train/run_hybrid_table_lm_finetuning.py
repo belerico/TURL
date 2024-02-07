@@ -39,13 +39,13 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 from transformers import WEIGHTS_NAME
 
-from data_loader.data_loaders import EntityTableLoader, WikiEntityTableDataset
-from data_loader.hybrid_data_loaders import HybridTableLoader, WikiHybridTableDataset
-from model.configuration import TableConfig
-from model.metric import accuracy, mean_average_precision, mean_rank, top_k_acc
-from model.model import HybridTableMaskedLM
-from model.optim import DenseSparseAdam
-from utils.util import (
+from src.data_loader.data_loaders import EntityTableLoader, WikiEntityTableDataset
+from src.data_loader.hybrid_data_loaders import HybridTableLoader, WikiHybridTableDataset
+from src.model.configuration import TableConfig
+from src.model.metric import accuracy, mean_average_precision, mean_rank, top_k_acc
+from src.model.model import HybridTableMaskedLM
+from src.model.optim import DenseSparseAdam
+from src.utils.util import (
     create_ent_embedding,
     generate_vocab_distribution,
     get_linear_schedule_with_warmup,

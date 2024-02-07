@@ -38,7 +38,7 @@ from tqdm import tqdm, trange
 from transformers import WEIGHTS_NAME, BertTokenizer, get_linear_schedule_with_warmup
 
 from src.data_loader.data_loaders import *
-from src.data_loader.EL_data_loaders import *
+from src.data_loader.el_data_loaders import *
 from src.model.configuration import TableConfig
 from src.model.metric import *
 from src.model.model import HybridTableEL

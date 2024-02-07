@@ -39,7 +39,7 @@ from transformers import WEIGHTS_NAME, AdamW, BertTokenizer, get_linear_schedule
 
 from src.baselines.row_population.metric import *
 from src.data_loader.data_loaders import *
-from src.data_loader.TR_data_loaders import *
+from src.data_loader.tr_data_loaders import *
 from src.model.configuration import TableConfig
 from src.model.model import BertTR, HybridTableTR
 from src.utils.util import *

@@ -38,7 +38,7 @@ from tqdm import tqdm, trange
 from transformers import WEIGHTS_NAME, AdamW, BertConfig, BertTokenizer, get_linear_schedule_with_warmup
 
 from src.data_loader.data_loaders import *
-from src.data_loader.RE_data_loaders import *
+from src.data_loader.re_data_loaders import *
 from src.model.metric import *
 from src.model.model import BertRE
 from src.utils.util import *
