@@ -117,3 +117,4 @@ cache/
 .idea/
 __MACOSX/
 core
+turl-pretrain-ddp-warmup
