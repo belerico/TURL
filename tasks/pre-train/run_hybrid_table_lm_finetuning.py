@@ -25,67 +25,35 @@ import argparse
 import glob
 import logging
 import os
-import random
-import re
-import shutil
+from contextlib import nullcontext
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import torch
+import torch.distributed as dist
+from lightning import seed_everything
 from lightning.fabric.loggers import TensorBoardLogger
 from torch.utils.data import Dataset, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
-from transformers import WEIGHTS_NAME, get_linear_schedule_with_warmup
+from transformers import WEIGHTS_NAME
 
-from src.data_loader.data_loaders import EntityTableLoader, WikiEntityTableDataset
-from src.data_loader.hybrid_data_loaders import HybridTableLoader, WikiHybridTableDataset
-from src.model.configuration import TableConfig
-from src.model.metric import accuracy, mean_average_precision, mean_rank, top_k_acc
-from src.model.model import HybridTableMaskedLM
-from src.model.optim import DenseSparseAdam
-from src.utils.util import create_ent_embedding, generate_vocab_distribution, load_entity_vocab
+from data_loader.data_loaders import EntityTableLoader, WikiEntityTableDataset
+from data_loader.hybrid_data_loaders import HybridTableLoader, WikiHybridTableDataset
+from model.configuration import TableConfig
+from model.metric import accuracy, mean_average_precision, mean_rank, top_k_acc
+from model.model import HybridTableMaskedLM
+from model.optim import DenseSparseAdam
+from utils.util import (
+    create_ent_embedding,
+    generate_vocab_distribution,
+    get_linear_schedule_with_warmup,
+    load_entity_vocab,
+    rotate_checkpoints,
+)
 
 logger = logging.getLogger(__name__)
-
-
-def set_seed(args):
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    if args.n_gpu > 0:
-        torch.cuda.manual_seed_all(args.seed)
-
-
-def _rotate_checkpoints(args, checkpoint_prefix, use_mtime=False, log_dir: str = None):
-    if not args.save_total_limit:
-        return
-    if args.save_total_limit <= 0:
-        return
-
-    # Check if we should delete older checkpoint(s)
-    glob_checkpoints = glob.glob(
-        os.path.join(args.output_dir if log_dir is None else log_dir, "{}-*".format(checkpoint_prefix))
-    )
-    if len(glob_checkpoints) <= args.save_total_limit:
-        return
-
-    ordering_and_checkpoint_path = []
-    for path in glob_checkpoints:
-        if use_mtime:
-            ordering_and_checkpoint_path.append((os.path.getmtime(path), path))
-        else:
-            regex_match = re.match(".*{}-([0-9]+)".format(checkpoint_prefix), path)
-            if regex_match and regex_match.groups():
-                ordering_and_checkpoint_path.append((int(regex_match.groups()[0]), path))
-
-    checkpoints_sorted = sorted(ordering_and_checkpoint_path)
-    checkpoints_sorted = [checkpoint[1] for checkpoint in checkpoints_sorted]
-    number_of_checkpoints_to_delete = max(0, len(checkpoints_sorted) - args.save_total_limit)
-    checkpoints_to_be_deleted = checkpoints_sorted[:number_of_checkpoints_to_delete]
-    for checkpoint in checkpoints_to_be_deleted:
-        logger.info("Deleting older checkpoint [{}] due to args.save_total_limit".format(checkpoint))
-        shutil.rmtree(checkpoint)
 
 
 def train(
@@ -97,8 +65,7 @@ def train(
     eval_dataset: Dataset | None = None,
     sample_distribution: np.ndarray | None = None,
 ):
-    """Train the model"""
-    args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
+    args.train_batch_size = args.per_gpu_train_batch_size
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
     train_dataloader = HybridTableLoader(
         train_dataset,
@@ -116,13 +83,14 @@ def train(
         use_visibility=False if args.no_visibility else True,
     )
 
+    steps_per_epoch = len(train_dataloader) // args.gradient_accumulation_steps
     if args.max_steps > 0:
         t_total = args.max_steps
-        args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
+        args.num_train_epochs = args.max_steps // steps_per_epoch + 1
     else:
-        t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
+        t_total = steps_per_epoch * args.num_train_epochs
 
-    # Prepare optimizer and schedule (linear warmup and decay)
+    # Prepare optimizer and scheduler (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
@@ -133,7 +101,11 @@ def train(
     ]
     optimizer = DenseSparseAdam(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+        optimizer,
+        num_warmup_steps=args.warmup_epochs * steps_per_epoch,
+        num_training_steps=t_total,
+        init_lrs=args.learning_rate,
+        lrs_after_warmup=args.scaled_learning_rate,
     )
     scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
     if args.resume != "":
@@ -147,35 +119,44 @@ def train(
         global_step = 0
 
     # Distributed training (should be after apex fp16 initialization)
-    if args.local_rank != -1:
+    if dist.is_available() and dist.is_initialized():
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=False
         )
 
     # Train!
-    logger.info("***** Running training *****")
-    logger.info("  Num examples = %d", len(train_dataset))
-    logger.info("  Num Epochs = %d", args.num_train_epochs)
-    logger.info("  Instantaneous batch size per GPU = %d", args.per_gpu_train_batch_size)
-    logger.info(
-        "  Total train batch size (w. parallel, distributed & accumulation) = %d",
-        args.train_batch_size
-        * args.gradient_accumulation_steps
-        * (torch.distributed.get_world_size() if args.local_rank != -1 else 1),
-    )
-    logger.info("  Gradient Accumulation steps = %d", args.gradient_accumulation_steps)
-    logger.info("  Total optimization steps = %d", t_total)
+    if args.local_rank in {-1, 0}:
+        logger.info("***** Running training *****")
+        logger.info("  Num examples = %d", len(train_dataset))
+        logger.info("  Num Epochs = %d", args.num_train_epochs)
+        logger.info("  Instantaneous batch size per GPU = %d", args.per_gpu_train_batch_size)
+        logger.info(
+            "  Total train batch size (w. parallel, distributed & accumulation) = %d",
+            args.train_batch_size
+            * args.gradient_accumulation_steps
+            * (dist.get_world_size() if args.local_rank != -1 else 1),
+        )
+        logger.info("  Gradient Accumulation steps = %d", args.gradient_accumulation_steps)
+        logger.info("  Total optimization steps = %d", t_total)
 
     tr_loss, logging_loss = 0.0, 0.0
     tok_tr_loss, tok_logging_loss, ent_tr_loss, ent_logging_loss = 0.0, 0.0, 0.0, 0.0
 
-    set_seed(args)
+    model.train()
     model.zero_grad(set_to_none=True)
-    train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0])
+    optimizer.zero_grad(set_to_none=True)
+
+    # Log first learning rate
+    if args.local_rank in {-1, 0} and args.logging_steps > 0:
+        tb_logger.log_metrics({"train/lr": scheduler.get_last_lr()[0]}, global_step)
+
+    # Train loop
+    train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in {-1, 0})
     for _ in train_iterator:
-        model.train()
-        epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
+        epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in {-1, 0})
         for step, batch in enumerate(epoch_iterator):
+            is_accumulating = (step + 1) % args.gradient_accumulation_steps != 0
+
             (
                 _,
                 input_tok,
@@ -216,59 +197,63 @@ def train(
                 if args.exclusive_ent == 2:  # mask only core entity
                     exclusive_ent_mask += (~core_entity_mask[:, :, None]).long() * 1000
 
-            with torch.autocast(
-                device_type="cuda" if str(args.device).startswith("cuda") else "cpu",
-                dtype=torch.float16,
-                enabled=args.fp16,
-            ):
-                tok_outputs, ent_outputs = model(
-                    input_tok,
-                    input_tok_type,
-                    input_tok_pos,
-                    input_tok_mask,
-                    input_ent_text,
-                    input_ent_text_length,
-                    input_ent_mask_type,
-                    input_ent,
-                    input_ent_type,
-                    input_ent_mask,
-                    candidate_entity_set,
-                    input_tok_labels,
-                    input_ent_labels,
-                    exclusive_ent_mask,
-                )
-                tok_loss = tok_outputs[0]  # model outputs are always tuple in transformers (see doc)
-                ent_loss = ent_outputs[0]
-                loss = tok_loss + ent_loss
+            # Do not sync gradients between processes if we are accumulating
+            no_backward_sync_ctx = nullcontext()
+            if is_accumulating and dist.is_available() and dist.is_initialized():
+                no_backward_sync_ctx = model.no_sync()
+            with no_backward_sync_ctx:
+                with torch.autocast(
+                    device_type="cuda" if str(args.device).startswith("cuda") else "cpu",
+                    dtype=torch.float16,
+                    enabled=args.fp16,
+                ):
+                    tok_outputs, ent_outputs = model(
+                        input_tok,
+                        input_tok_type,
+                        input_tok_pos,
+                        input_tok_mask,
+                        input_ent_text,
+                        input_ent_text_length,
+                        input_ent_mask_type,
+                        input_ent,
+                        input_ent_type,
+                        input_ent_mask,
+                        candidate_entity_set,
+                        input_tok_labels,
+                        input_ent_labels,
+                        exclusive_ent_mask,
+                    )
+                    tok_loss = tok_outputs[0]  # model outputs are always tuple in transformers (see doc)
+                    ent_loss = ent_outputs[0]
+                    loss = tok_loss + ent_loss
 
-            if args.n_gpu > 1:
+                # Loss reduction
                 loss = loss.mean()
                 tok_loss = tok_loss.mean()
                 ent_loss = ent_loss.mean()
-            if args.gradient_accumulation_steps > 1:
-                loss = loss / args.gradient_accumulation_steps
-                tok_loss = tok_loss / args.gradient_accumulation_steps
-                ent_loss = ent_loss / args.gradient_accumulation_steps
+                if args.gradient_accumulation_steps > 1:
+                    loss = loss / args.gradient_accumulation_steps
+                    tok_loss = tok_loss / args.gradient_accumulation_steps
+                    ent_loss = ent_loss / args.gradient_accumulation_steps
 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+                # Scaled loss backward for mixed precision training
+                scaler.scale(loss).backward()
 
             tr_loss += loss.item()
             tok_tr_loss += tok_loss.item()
             ent_tr_loss += ent_loss.item()
 
-            if (step + 1) % args.gradient_accumulation_steps == 0:
+            if not is_accumulating:
                 # Unscales the gradients of optimizer's assigned params in-place
                 scaler.unscale_(optimizer)
 
                 # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
-                # Optimizer update
+                # Optimizer and scheduler update
                 scaler.step(optimizer)
                 scaler.update()
-                scheduler.step()  # Update learning rate schedule
+                scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
 
                 # Update global step
@@ -287,20 +272,28 @@ def train(
                             sample_distribution=None,
                             log_dir=tb_logger.log_dir,
                         )
+
+                        # Put model back to training mode
+                        model.train()
+
+                        # Log eval metrics with TensorBoard
                         for key, value in results.items():
                             tb_logger.log_metrics({"eval/{}".format(key): value}, global_step)
-                    logging_loss = tr_loss
-                    tok_logging_loss = tok_tr_loss
-                    ent_logging_loss = ent_tr_loss
+
+                    # Log training metrics with TensorBoard
                     tb_logger.log_metrics(
                         {
-                            "train/lr": scheduler.get_lr()[0],
+                            "train/lr": scheduler.get_last_lr()[0],
                             "train/loss": (tr_loss - logging_loss) / args.logging_steps,
                             "train/tok_loss": (tok_tr_loss - tok_logging_loss) / args.logging_steps,
                             "train/ent_loss": (ent_tr_loss - ent_logging_loss) / args.logging_steps,
+                            "train/grad_norm": grad_norm,
                         },
                         global_step,
                     )
+                    logging_loss = tr_loss
+                    tok_logging_loss = tok_tr_loss
+                    ent_logging_loss = ent_tr_loss
 
                 if args.local_rank in {-1, 0} and args.save_steps > 0 and global_step % args.save_steps == 0:
                     # Save model checkpoint
@@ -309,10 +302,8 @@ def train(
                         os.makedirs(output_dir)
 
                     # Take care of distributed/parallel training
-                    model_to_save = model.module if hasattr(model, "module") else model
-                    model_to_save.save_pretrained(
-                        output_dir, safe_serialization=False, is_main_process=args.local_rank in {-1, 0}
-                    )
+                    model_to_save = getattr(model, "module", model)
+                    model_to_save.save_pretrained(output_dir)
 
                     # Save CLI args
                     torch.save(args, os.path.join(output_dir, "training_args.bin"))
@@ -328,10 +319,11 @@ def train(
                     logger.info("Saving model checkpoint to %s", output_dir)
 
                     # Remove older checkpoints
-                    _rotate_checkpoints(args, "checkpoint", log_dir=tb_logger.log_dir)
+                    rotate_checkpoints(args, "checkpoint", log_dir=tb_logger.log_dir)
 
                 # Possibly wait for rank-0 to log metrics and save model
-                torch.distributed.barrier()
+                if dist.is_available() and dist.is_initialized():
+                    dist.barrier()
 
             if args.max_steps > 0 and global_step > args.max_steps:
                 epoch_iterator.close()
@@ -345,6 +337,7 @@ def train(
     return global_step, tr_loss / max(global_step, 1)
 
 
+@torch.no_grad()
 def evaluate(
     args: argparse.Namespace,
     config: TableConfig,
@@ -361,7 +354,7 @@ def evaluate(
     if args.local_rank in {-1, 0}:
         os.makedirs(os.path.dirname(output_eval_file), exist_ok=True)
 
-    args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
+    args.eval_batch_size = args.per_gpu_eval_batch_size
     eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = HybridTableLoader(
         eval_dataset,
@@ -426,42 +419,41 @@ def evaluate(
         input_ent_labels = input_ent_labels.to(args.device)
         candidate_entity_set = candidate_entity_set.to(args.device)
         core_entity_set = core_entity_set.to(args.device)
-        with torch.no_grad():
-            tok_outputs, ent_outputs = model(
-                input_tok,
-                input_tok_type,
-                input_tok_pos,
-                input_tok_mask,
-                input_ent_text,
-                input_ent_text_length,
-                input_ent_mask_type,
-                input_ent,
-                input_ent_type,
-                input_ent_mask,
-                candidate_entity_set,
-                input_tok_labels,
-                input_ent_labels,
-            )
-            tok_loss = tok_outputs[0]  # model outputs are always tuple in transformers (see doc)
-            ent_loss = ent_outputs[0]
-            tok_prediction_scores = tok_outputs[1]
-            ent_prediction_scores = ent_outputs[1]
-            tok_acc = accuracy(
-                tok_prediction_scores.view(-1, config.vocab_size), input_tok_labels.view(-1), ignore_index=-1
-            )
-            ent_acc = accuracy(
-                ent_prediction_scores.view(-1, config.max_entity_candidate), input_ent_labels.view(-1), ignore_index=-1
-            )
-            ent_mr = mean_rank(ent_prediction_scores.view(-1, config.max_entity_candidate), input_ent_labels.view(-1))
-            core_ent_map = mean_average_precision(ent_prediction_scores[:, 1, :], core_entity_set)
-            loss = tok_loss + ent_loss
-            eval_loss += loss.mean().item()
-            tok_eval_loss += tok_loss.mean().item()
-            ent_eval_loss += ent_loss.mean().item()
-            tok_eval_acc += tok_acc.item()
-            ent_eval_acc += ent_acc.item()
-            ent_eval_mr += ent_mr.item()
-            core_ent_eval_map += core_ent_map.item()
+        tok_outputs, ent_outputs = model(
+            input_tok,
+            input_tok_type,
+            input_tok_pos,
+            input_tok_mask,
+            input_ent_text,
+            input_ent_text_length,
+            input_ent_mask_type,
+            input_ent,
+            input_ent_type,
+            input_ent_mask,
+            candidate_entity_set,
+            input_tok_labels,
+            input_ent_labels,
+        )
+        tok_loss = tok_outputs[0]  # model outputs are always tuple in transformers (see doc)
+        ent_loss = ent_outputs[0]
+        tok_prediction_scores = tok_outputs[1]
+        ent_prediction_scores = ent_outputs[1]
+        tok_acc = accuracy(
+            tok_prediction_scores.view(-1, config.vocab_size), input_tok_labels.view(-1), ignore_index=-1
+        )
+        ent_acc = accuracy(
+            ent_prediction_scores.view(-1, config.max_entity_candidate), input_ent_labels.view(-1), ignore_index=-1
+        )
+        ent_mr = mean_rank(ent_prediction_scores.view(-1, config.max_entity_candidate), input_ent_labels.view(-1))
+        core_ent_map = mean_average_precision(ent_prediction_scores[:, 1, :], core_entity_set)
+        loss = tok_loss + ent_loss
+        eval_loss += loss.mean().item()
+        tok_eval_loss += tok_loss.mean().item()
+        ent_eval_loss += ent_loss.mean().item()
+        tok_eval_acc += tok_acc.item()
+        ent_eval_acc += ent_acc.item()
+        ent_eval_mr += ent_mr.item()
+        core_ent_eval_map += core_ent_map.item()
         nb_eval_steps += 1
 
     eval_loss = eval_loss / nb_eval_steps
@@ -491,6 +483,7 @@ def evaluate(
     return result
 
 
+@torch.no_grad()
 def evaluate_analysis(
     args,
     config,
@@ -507,7 +500,7 @@ def evaluate_analysis(
     if not os.path.exists(eval_output_dir) and args.local_rank in {-1, 0}:
         os.makedirs(eval_output_dir)
 
-    args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
+    args.eval_batch_size = args.per_gpu_eval_batch_size
     eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = EntityTableLoader(
         eval_dataset,
@@ -561,148 +554,144 @@ def evaluate_analysis(
         input_ent_labels = input_ent_labels.to(args.device)
         candidate_entity_set = candidate_entity_set.to(args.device)
         core_entity_set = core_entity_set.to(args.device)
-        with torch.no_grad():
-            tok_outputs, ent_outputs = model(
-                input_tok,
-                input_tok_type,
-                input_tok_pos,
-                input_tok_mask,
-                input_ent,
-                input_ent_type,
-                input_ent_mask,
-                candidate_entity_set,
-                input_tok_labels,
-                input_ent_labels,
-            )
-            tok_outputs[1]
-            ent_prediction_scores = ent_outputs[1]
-            core_ent_map = mean_average_precision(ent_prediction_scores[:, 1, :], core_entity_set)
-            core_ent_eval_map += core_ent_map.item()
-            ent_acc = accuracy(
-                ent_prediction_scores.view(-1, config.max_entity_candidate), input_ent_labels.view(-1), ignore_index=-1
-            )
-            ent_acc_5 = top_k_acc(
-                ent_prediction_scores.view(-1, config.max_entity_candidate),
-                input_ent_labels.view(-1),
-                ignore_index=-1,
-                k=5,
-            )
-            ent_acc_10 = top_k_acc(
-                ent_prediction_scores.view(-1, config.max_entity_candidate),
-                input_ent_labels.view(-1),
-                ignore_index=-1,
-                k=10,
-            )
-            ent_eval_acc += ent_acc.item()
-            ent_eval_acc_5 += ent_acc_5.item()
-            ent_eval_acc_10 += ent_acc_10.item()
-            ent_sorted_predictions = torch.argsort(ent_prediction_scores, dim=-1, descending=True)
-            for i in range(input_tok.shape[0]):
-                tmp_str = []
-                meta = ""
-                headers = []
-                for j in range(input_tok.shape[1]):
-                    if input_tok[i, j] == 0:
+        tok_outputs, ent_outputs = model(
+            input_tok,
+            input_tok_type,
+            input_tok_pos,
+            input_tok_mask,
+            input_ent,
+            input_ent_type,
+            input_ent_mask,
+            candidate_entity_set,
+            input_tok_labels,
+            input_ent_labels,
+        )
+        tok_outputs[1]
+        ent_prediction_scores = ent_outputs[1]
+        core_ent_map = mean_average_precision(ent_prediction_scores[:, 1, :], core_entity_set)
+        core_ent_eval_map += core_ent_map.item()
+        ent_acc = accuracy(
+            ent_prediction_scores.view(-1, config.max_entity_candidate), input_ent_labels.view(-1), ignore_index=-1
+        )
+        ent_acc_5 = top_k_acc(
+            ent_prediction_scores.view(-1, config.max_entity_candidate),
+            input_ent_labels.view(-1),
+            ignore_index=-1,
+            k=5,
+        )
+        ent_acc_10 = top_k_acc(
+            ent_prediction_scores.view(-1, config.max_entity_candidate),
+            input_ent_labels.view(-1),
+            ignore_index=-1,
+            k=10,
+        )
+        ent_eval_acc += ent_acc.item()
+        ent_eval_acc_5 += ent_acc_5.item()
+        ent_eval_acc_10 += ent_acc_10.item()
+        ent_sorted_predictions = torch.argsort(ent_prediction_scores, dim=-1, descending=True)
+        for i in range(input_tok.shape[0]):
+            tmp_str = []
+            meta = ""
+            headers = []
+            for j in range(input_tok.shape[1]):
+                if input_tok[i, j] == 0:
+                    break
+                if input_tok_pos[i, j] == 0:
+                    if len(tmp_str) != 0:
+                        if input_tok_type[i, j - 1] == 0:
+                            meta = eval_dataset.tokenizer.decode(tmp_str)
+                        elif input_tok_type[i, j - 1] == 1:
+                            headers.append(eval_dataset.tokenizer.decode(tmp_str))
+                    tmp_str = []
+                if input_tok_labels[i, j] == -1:
+                    tmp_str.append(input_tok[i, j].item())
+                else:
+                    tmp_str.append(input_tok_labels[i, j].item())
+            if len(tmp_str) != 0:
+                if input_tok_type[i, j - 1] == 0:
+                    meta = eval_dataset.tokenizer.decode(tmp_str)
+                elif input_tok_type[i, j - 1] == 1:
+                    headers.append(eval_dataset.tokenizer.decode(tmp_str))
+            output_file.write(meta + "\n")
+            output_file.write("\t".join(headers) + "\n")
+            for j in range(input_ent.shape[1]):
+                if j == 0:
+                    pgEnt = eval_dataset.entity_vocab[input_ent[i, j].item()]
+                    output_file.write("pgEnt:\t%s\t%d" % (pgEnt["wiki_title"], pgEnt["count"]) + "\n")
+                elif j == 1:
+                    core_entities = [
+                        candidate_entity_set[i, m] for m in range(args.max_entity_candidate) if core_entity_set[i, m]
+                    ]
+                    core_entities = [eval_dataset.entity_vocab[z.item()] for z in core_entities]
+                    output_file.write("core entities:\n")
+                    output_file.write(
+                        "\t".join(["%s:%d" % (z["wiki_title"], z["count"]) for z in core_entities]) + "\n"
+                    )
+                    output_file.write("core entity predictions (top100):\n")
+                    pred_core_entities = ent_sorted_predictions[i, 1, :100].tolist()
+                    for z in pred_core_entities:
+                        if core_entity_set[i, z]:
+                            output_file.write(
+                                "[%s:%f:%d]\t"
+                                % (
+                                    eval_dataset.entity_vocab[candidate_entity_set[i, z].item()]["wiki_title"],
+                                    ent_prediction_scores[i, 1, z].item(),
+                                    eval_dataset.entity_vocab[candidate_entity_set[i, z].item()]["count"],
+                                )
+                            )
+                        else:
+                            output_file.write(
+                                "%s:%f:%d\t"
+                                % (
+                                    eval_dataset.entity_vocab[candidate_entity_set[i, z].item()]["wiki_title"],
+                                    ent_prediction_scores[i, 1, z].item(),
+                                    eval_dataset.entity_vocab[candidate_entity_set[i, z].item()]["count"],
+                                )
+                            )
+                    output_file.write("\n")
+                else:
+                    ent = input_ent[i, j]
+                    if ent == 0:
                         break
-                    if input_tok_pos[i, j] == 0:
-                        if len(tmp_str) != 0:
-                            if input_tok_type[i, j - 1] == 0:
-                                meta = eval_dataset.tokenizer.decode(tmp_str)
-                            elif input_tok_type[i, j - 1] == 1:
-                                headers.append(eval_dataset.tokenizer.decode(tmp_str))
-                        tmp_str = []
-                    if input_tok_labels[i, j] == -1:
-                        tmp_str.append(input_tok[i, j].item())
-                    else:
-                        tmp_str.append(input_tok_labels[i, j].item())
-                if len(tmp_str) != 0:
-                    if input_tok_type[i, j - 1] == 0:
-                        meta = eval_dataset.tokenizer.decode(tmp_str)
-                    elif input_tok_type[i, j - 1] == 1:
-                        headers.append(eval_dataset.tokenizer.decode(tmp_str))
-                output_file.write(meta + "\n")
-                output_file.write("\t".join(headers) + "\n")
-                # pdb.set_trace()
-                for j in range(input_ent.shape[1]):
-                    if j == 0:
-                        pgEnt = eval_dataset.entity_vocab[input_ent[i, j].item()]
-                        output_file.write("pgEnt:\t%s\t%d" % (pgEnt["wiki_title"], pgEnt["count"]) + "\n")
-                    elif j == 1:
-                        core_entities = [
-                            candidate_entity_set[i, m]
-                            for m in range(args.max_entity_candidate)
-                            if core_entity_set[i, m]
-                        ]
-                        core_entities = [eval_dataset.entity_vocab[z.item()] for z in core_entities]
-                        output_file.write("core entities:\n")
+                    ent_label = input_ent_labels[i, j]
+                    ent_type = input_ent_type[i, j]
+                    pred_entities = ent_sorted_predictions[i, j, :100].tolist()
+                    if ent_label == -1:
                         output_file.write(
-                            "\t".join(["%s:%d" % (z["wiki_title"], z["count"]) for z in core_entities]) + "\n"
+                            "%s\t-1\t%d\n" % (eval_dataset.entity_vocab[ent.item()]["wiki_title"], ent_type)
                         )
-                        output_file.write("core entity predictions (top100):\n")
-                        pred_core_entities = ent_sorted_predictions[i, 1, :100].tolist()
-                        for z in pred_core_entities:
-                            if core_entity_set[i, z]:
+                    else:
+                        output_file.write(
+                            "%s\t%s:%d\t%d\t"
+                            % (
+                                eval_dataset.entity_vocab[ent.item()]["wiki_title"],
+                                eval_dataset.entity_vocab[candidate_entity_set[i, ent_label].item()]["wiki_title"],
+                                eval_dataset.entity_vocab[candidate_entity_set[i, ent_label].item()]["count"],
+                                ent_type,
+                            )
+                        )
+                        for z in pred_entities:
+                            if z == ent_label:
                                 output_file.write(
-                                    "[%s:%f:%d]\t"
+                                    "[%s:%f:%d]"
                                     % (
                                         eval_dataset.entity_vocab[candidate_entity_set[i, z].item()]["wiki_title"],
-                                        ent_prediction_scores[i, 1, z].item(),
+                                        ent_prediction_scores[i, j, z],
                                         eval_dataset.entity_vocab[candidate_entity_set[i, z].item()]["count"],
                                     )
                                 )
+                                break
                             else:
                                 output_file.write(
                                     "%s:%f:%d\t"
                                     % (
                                         eval_dataset.entity_vocab[candidate_entity_set[i, z].item()]["wiki_title"],
-                                        ent_prediction_scores[i, 1, z].item(),
+                                        ent_prediction_scores[i, j, z],
                                         eval_dataset.entity_vocab[candidate_entity_set[i, z].item()]["count"],
                                     )
                                 )
                         output_file.write("\n")
-                    else:
-                        ent = input_ent[i, j]
-                        if ent == 0:
-                            break
-                        ent_label = input_ent_labels[i, j]
-                        ent_type = input_ent_type[i, j]
-                        pred_entities = ent_sorted_predictions[i, j, :100].tolist()
-                        if ent_label == -1:
-                            output_file.write(
-                                "%s\t-1\t%d\n" % (eval_dataset.entity_vocab[ent.item()]["wiki_title"], ent_type)
-                            )
-                        else:
-                            output_file.write(
-                                "%s\t%s:%d\t%d\t"
-                                % (
-                                    eval_dataset.entity_vocab[ent.item()]["wiki_title"],
-                                    eval_dataset.entity_vocab[candidate_entity_set[i, ent_label].item()]["wiki_title"],
-                                    eval_dataset.entity_vocab[candidate_entity_set[i, ent_label].item()]["count"],
-                                    ent_type,
-                                )
-                            )
-                            for z in pred_entities:
-                                if z == ent_label:
-                                    output_file.write(
-                                        "[%s:%f:%d]"
-                                        % (
-                                            eval_dataset.entity_vocab[candidate_entity_set[i, z].item()]["wiki_title"],
-                                            ent_prediction_scores[i, j, z],
-                                            eval_dataset.entity_vocab[candidate_entity_set[i, z].item()]["count"],
-                                        )
-                                    )
-                                    break
-                                else:
-                                    output_file.write(
-                                        "%s:%f:%d\t"
-                                        % (
-                                            eval_dataset.entity_vocab[candidate_entity_set[i, z].item()]["wiki_title"],
-                                            ent_prediction_scores[i, j, z],
-                                            eval_dataset.entity_vocab[candidate_entity_set[i, z].item()]["count"],
-                                        )
-                                    )
-                            output_file.write("\n")
-                output_file.write("-" * 100 + "\n")
+            output_file.write("-" * 100 + "\n")
         nb_eval_steps += 1
     core_ent_eval_map = core_ent_eval_map / nb_eval_steps
     ent_eval_acc = ent_eval_acc / nb_eval_steps
@@ -800,7 +789,8 @@ def main():
         default=1,
         help="Number of updates steps to accumulate before performing a backward/update pass.",
     )
-    parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.")
+    parser.add_argument("--learning_rate", default=1e-4, type=float, help="The initial learning rate for Adam.")
+    parser.add_argument("--linear_scale_lr", action="store_true", help="Whether to linearly scale learning rate.")
     parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight deay if we apply some.")
     parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
@@ -813,7 +803,7 @@ def main():
         type=int,
         help="If > 0: set total number of training steps to perform. Override num_train_epochs.",
     )
-    parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.")
+    parser.add_argument("--warmup_epochs", default=0, type=int, help="Linear warmup over warmup_epochs.")
     parser.add_argument("--logging_steps", type=int, default=50, help="Log every X updates steps.")
     parser.add_argument("--save_steps", type=int, default=50, help="Save checkpoint every X updates steps.")
     parser.add_argument(
@@ -842,6 +832,8 @@ def main():
     )
     parser.add_argument("--dry_run", action="store_true", help="Sanity checks for training.")
     parser.add_argument("--local-rank", type=int, default=-1, help="For distributed training: local_rank")
+    parser.add_argument("--allow_tf32", action="store_true", help="Allow the use of TF32 on NVIDIA Ampere GPUs")
+
     args = parser.parse_args()
     args.data_dir = os.path.expanduser(args.data_dir)
 
@@ -857,6 +849,10 @@ def main():
             )
         )
 
+    if args.allow_tf32:
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cuda.matmul.allow_tf32 = True
+
     # Setup CUDA, GPU & distributed training
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
@@ -864,9 +860,20 @@ def main():
     else:  # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         # torch.cuda.set_device(args.local_rank)
         device = torch.device("cuda", args.local_rank)
-        torch.distributed.init_process_group(backend="nccl")
-        args.n_gpu = torch.cuda.device_count()
+        dist.init_process_group(backend="nccl")
+        args.n_gpu = dist.get_world_size()
     args.device = device
+
+    # Linear scale the learning rate
+    world_size = 1
+    if dist.is_available() and dist.is_initialized():
+        world_size = dist.get_world_size()
+    if args.linear_scale_lr:
+        args.scaled_learning_rate = (
+            1e-4 * float(args.per_gpu_train_batch_size * world_size * args.gradient_accumulation_steps) / 50.0
+        )
+    else:
+        args.scaled_learning_rate = args.learning_rate
 
     # Setup logging
     logging.basicConfig(
@@ -884,7 +891,7 @@ def main():
     )
 
     # Set seed
-    set_seed(args)
+    seed_everything(args.seed)
 
     # Get model configuration
     config = TableConfig.from_pretrained(
@@ -893,8 +900,11 @@ def main():
     )
     config.__dict__["max_entity_candidate"] = args.max_entity_candidate
 
+    # Get date and time in format YYYY-MM-DD_HH-MM-SS
+    dt_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
     # Setup TensorboardLogger
-    tb_logger = TensorBoardLogger(os.path.join(args.output_dir, "logs"), name="turl")
+    tb_logger = TensorBoardLogger(os.path.join(args.output_dir, "logs", "turl", "pre-train"), name=dt_now)
     tb_logger.experiment.add_text(
         "CLI arguments",
         "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
@@ -903,13 +913,15 @@ def main():
         "HF config",
         "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in config.to_dict().items()])),
     )
-    logger.info(
-        "Training/evaluation parameters\n%s" % ("\n".join([f"{key}: {value}" for key, value in vars(args).items()]))
-    )
+
+    if args.local_rank in {-1, 0}:
+        logger.info(
+            "Training/evaluation parameters\n%s" % ("\n".join([f"{key}: {value}" for key, value in vars(args).items()]))
+        )
 
     # Load pretrained model and tokenizer
-    if args.local_rank not in [-1, 0]:
-        torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training download model & vocab
+    if args.local_rank not in {-1, 0}:
+        dist.barrier()  # Barrier to make sure only the first process in distributed training download model & vocab
 
     # Load entity vocab
     entity_vocab = load_entity_vocab(args.data_dir, ignore_bad_title=True, min_ent_count=2)
@@ -926,7 +938,9 @@ def main():
 
     if args.do_train:
         if args.resume == "":
-            model.from_pretrained("huawei-noah/TinyBERT_General_4L_312D", config=config)
+            lm_model_dir = "tiny-bert"
+            lm_checkpoint = torch.load(lm_model_dir + "/pytorch_model.bin")
+            model.load_pretrained(lm_checkpoint)
             new_ent_embeddings_dir = Path("./ent_embeddings")
             new_ent_embeddings_dir.mkdir(parents=True, exist_ok=True)
             if not os.path.exists(new_ent_embeddings_dir / "new_ent_embeddings.bin"):
@@ -942,14 +956,14 @@ def main():
         model.to(args.device)
 
     if args.local_rank == 0:
-        torch.distributed.barrier()  # End of barrier to make sure only the first process in distributed training download model & vocab
+        dist.barrier()  # End of barrier to make sure only the first process in distributed training download model & vocab
 
     # Training
     if args.do_train:
-        if args.local_rank not in [-1, 0]:
+        if args.local_rank not in {-1, 0}:
             # Barrier to make sure only the first process in distributed training process the dataset
             # while the others will use the cache
-            torch.distributed.barrier()
+            dist.barrier()
 
         train_dataset = WikiHybridTableDataset(
             args.data_dir,
@@ -984,7 +998,7 @@ def main():
         )
 
         if args.local_rank == 0:
-            torch.distributed.barrier()
+            dist.barrier()
 
         # Run the training loop
         global_step, tr_loss = train(
@@ -998,14 +1012,19 @@ def main():
         )
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
-    # Saving last checkpoint
+    # Saving best-practices: if you use save_pretrained for the model and tokenizer, you can reload them using from_pretrained()
     if args.do_train and args.local_rank in {-1, 0}:
         output_dir = os.path.join(tb_logger.log_dir, "checkpoints", "checkpoint-last")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
+
         logger.info("Saving last model checkpoint to %s", output_dir)
-        model_to_save = model.module if hasattr(model, "module") else model
-        model_to_save.save_pretrained(output_dir, safe_serialization=False, is_main_process=args.local_rank in {-1, 0})
+        # Save a trained model, configuration and tokenizer using `save_pretrained()`.
+        # They can then be reloaded using `from_pretrained()`
+        model_to_save = getattr(model, "module", model)
+        model_to_save.save_pretrained(output_dir)
+
+        # Good practice: save your training arguments together with the trained model
         torch.save(args, os.path.join(output_dir, "training_args.bin"))
 
     # Evaluation
