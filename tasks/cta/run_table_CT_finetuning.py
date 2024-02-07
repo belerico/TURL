@@ -21,6 +21,10 @@ using a masked language modeling (MLM) loss.
 
 from __future__ import absolute_import, annotations, division, print_function
 
+import sys
+
+sys.path.extend([".", "..", "../.."])
+
 import argparse
 import glob
 import logging
