@@ -223,7 +223,8 @@ def train(
                         input_ent_labels,
                         exclusive_ent_mask,
                     )
-                    tok_loss = tok_outputs[0]  # model outputs are always tuple in transformers (see doc)
+                    # model outputs are always tuple in transformers (see doc)
+                    tok_loss = tok_outputs[0]
                     ent_loss = ent_outputs[0]
                     loss = tok_loss + ent_loss
 
@@ -832,6 +833,15 @@ def main():
     parser.add_argument("--dry_run", action="store_true", help="Sanity checks for training.")
     parser.add_argument("--local-rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument("--allow_tf32", action="store_true", help="Allow the use of TF32 on NVIDIA Ampere GPUs")
+    parser.add_argument("--base_lr", type=float, default=1e-4, help="The base learning rate used to train the model.")
+    parser.add_argument(
+        "--base_effective_batch_size",
+        type=float,
+        default=50,
+        help="The base effective batch size used to train the model. "
+        "The effective batch size is computed as "
+        "base_effective_batch_size = per_gpu_train_batch_size * gradient_accumulation_steps * n_gpu.",
+    )
 
     args = parser.parse_args()
     args.data_dir = os.path.expanduser(args.data_dir)
@@ -866,9 +876,9 @@ def main():
     # Linear scale the learning rate
     if args.linear_scale_lr:
         args.scaled_learning_rate = (
-            1e-4
+            args.base_lr
             * float(args.per_gpu_train_batch_size * dist.get_world_size() * args.gradient_accumulation_steps)
-            / 50.0
+            / args.base_effective_batch_size
         )
     else:
         args.scaled_learning_rate = args.learning_rate
