@@ -323,7 +323,8 @@ def train(
                     rotate_checkpoints(args, "checkpoint", log_dir=tb_logger.log_dir)
 
                 # Possibly wait for rank-0 to log metrics and save model
-                dist.barrier()
+                if dist.is_available() and dist.is_initialized():
+                    dist.barrier()
 
             if args.max_steps > 0 and global_step > args.max_steps:
                 epoch_iterator.close()
@@ -874,11 +875,12 @@ def main():
     args.device = device
 
     # Linear scale the learning rate
+    world_size = 1
+    if dist.is_available() and dist.is_initialized():
+        world_size = dist.get_world_size()
     if args.linear_scale_lr:
         args.scaled_learning_rate = (
-            args.base_lr
-            * float(args.per_gpu_train_batch_size * dist.get_world_size() * args.gradient_accumulation_steps)
-            / args.base_effective_batch_size
+            1e-4 * float(args.per_gpu_train_batch_size * world_size * args.gradient_accumulation_steps) / 50.0
         )
     else:
         args.scaled_learning_rate = args.learning_rate
