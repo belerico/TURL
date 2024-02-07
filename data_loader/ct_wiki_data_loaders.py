@@ -170,11 +170,10 @@ class WikiCTDataset(Dataset):
             tqdm(pool.imap(partial(process_single_CT, config=self), cols, chunksize=1000), total=len(cols))
         )
         pool.close()
-        # pdb.set_trace()
 
         with open(os.path.join(data_dir, "procressed_WikiCT", "{}.pickle".format(self.src)), "wb") as f:
             pickle.dump(processed_cols, f)
-        # pdb.set_trace()
+
         return processed_cols
 
     def __init__(
@@ -192,7 +191,7 @@ class WikiCTDataset(Dataset):
         if tokenizer is not None:
             self.tokenizer = tokenizer
         else:
-            self.tokenizer = BertTokenizer.from_pretrained("data/pre-trained_models/bert-base-uncased")
+            self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.src = src
         self.force_new = force_new
         self.max_input_tok = max_input_tok
@@ -205,7 +204,6 @@ class WikiCTDataset(Dataset):
         self.type_vocab = type_vocab
         self.type_num = len(self.type_vocab)
         self.data = self._preprocess(data_dir)
-        # pdb.set_trace()
 
     def __len__(self):
         return len(self.data)
