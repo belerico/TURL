@@ -309,7 +309,7 @@ def train(
 
                     # Take care of distributed/parallel training
                     model_to_save = getattr(model, "module", model)
-                    model_to_save.save_pretrained(output_dir)
+                    model_to_save.save_pretrained(output_dir, safe_serialization=False)
 
                     # Save CLI args
                     torch.save(args, os.path.join(output_dir, "training_args.bin"))
@@ -757,10 +757,10 @@ def main():
         # Save a trained model, configuration and tokenizer using `save_pretrained()`.
         # They can then be reloaded using `from_pretrained()`
         model_to_save = getattr(model, "module", model)
-        model_to_save.save_pretrained(output_dir)
+        model_to_save.save_pretrained(output_dir, safe_serialization=False)
 
         # Good practice: save your training arguments together with the trained model
-        torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
+        torch.save(args, os.path.join(output_dir, "training_args.bin"))
 
     # Evaluation
     results = {}
