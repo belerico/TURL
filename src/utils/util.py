@@ -242,7 +242,14 @@ def get_linear_schedule_with_warmup(
     return LambdaLR(optimizer, lr_lambdas, last_epoch)
 
 
-def rotate_checkpoints(args, checkpoint_prefix, use_mtime=False, log_dir: str = None, logger: Logger = None):
+def rotate_checkpoints(
+    args,
+    checkpoint_prefix,
+    use_mtime=False,
+    log_dir: str = None,
+    checkpoint_dir: str = "checkpoints",
+    logger: Logger = None,
+):
     if not args.save_total_limit:
         return
     if args.save_total_limit <= 0:
@@ -250,8 +257,12 @@ def rotate_checkpoints(args, checkpoint_prefix, use_mtime=False, log_dir: str = 
 
     # Check if we should delete older checkpoint(s)
     glob_checkpoints = glob.glob(
-        os.path.join(args.output_dir if log_dir is None else log_dir, "{}-*".format(checkpoint_prefix))
+        os.path.join(args.output_dir if log_dir is None else log_dir, checkpoint_dir, "{}-*".format(checkpoint_prefix))
     )
+    if len(glob_checkpoints) == 0:
+        warnings.warn(
+            f"Found no checkpoints at {os.path.join(args.output_dir if log_dir is None else log_dir, checkpoint_dir)}, cannot rotate checkpoints"
+        )
     if len(glob_checkpoints) <= args.save_total_limit:
         return
 
