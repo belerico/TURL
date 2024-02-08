@@ -659,6 +659,9 @@ def main():
         args.config_name if args.config_name else args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
+    type_vocab = load_type_vocab(args.data_dir)
+    config.class_num = len(type_vocab)
+    config.mode = args.mode
 
     # Get date and time in format YYYY-MM-DD_HH-MM-SS
     dt_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -678,10 +681,6 @@ def main():
         logger.info(
             "Training/evaluation parameters\n%s" % ("\n".join([f"{key}: {value}" for key, value in vars(args).items()]))
         )
-
-    type_vocab = load_type_vocab(args.data_dir)
-    config.class_num = len(type_vocab)
-    config.mode = args.mode
 
     # Load pre-trained model
     model = HybridTableCT(config, is_simple=True)
