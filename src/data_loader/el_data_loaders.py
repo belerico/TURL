@@ -13,7 +13,12 @@ from transformers.models.bert.tokenization_bert import BertTokenizer
 
 
 def process_single_EL(input_data, config):
-    table_id, pgTitle, secTitle, caption, headers, entities, candidate_entities, labels, _ = input_data
+    if len(input_data) > 8:
+        table_id, pgTitle, secTitle, caption, headers, entities, candidate_entities, labels, _ = input_data
+    elif len(input_data) == 8:
+        table_id, pgTitle, secTitle, caption, headers, entities, candidate_entities, labels = input_data
+    else:
+        RuntimeError("Unknown `input_data` length: expected 8 or 9, got {}".format(len(input_data)))
 
     cand_name = []
     cand_description = []
@@ -189,11 +194,10 @@ class ELDataset(Dataset):
             tqdm(pool.imap(partial(process_single_EL, config=self), data, chunksize=1000), total=len(data))
         )
         pool.close()
-        # pdb.set_trace()
 
         with open(os.path.join(data_dir, "procressed_EL", "{}.pickle".format(self.src)), "wb") as f:
             pickle.dump(processed_data, f)
-        # pdb.set_trace()
+
         return processed_data
 
     def __init__(
@@ -209,7 +213,7 @@ class ELDataset(Dataset):
         if tokenizer is not None:
             self.tokenizer = tokenizer
         else:
-            self.tokenizer = BertTokenizer.from_pretrained("data/pre-trained_models/bert-base-uncased")
+            self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.src = src
         self.force_new = force_new
         self.max_input_tok = max_input_tok

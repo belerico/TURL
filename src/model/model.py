@@ -265,9 +265,9 @@ class TableELEmbeddings(nn.Module):
 
     def __init__(self, config):
         super(TableELEmbeddings, self).__init__()
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=0, sparse=True)
+        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=0, sparse=False)
         self.ent_type_embeddings = nn.Embedding(
-            config.ent_type_vocab_size, config.hidden_size, padding_idx=0, sparse=True
+            config.ent_type_vocab_size, config.hidden_size, padding_idx=0, sparse=False
         )
 
         self.LayerNorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
@@ -577,6 +577,11 @@ class TableLMSubPredictionHead(nn.Module):
     def __init__(self, config, output_dim=None, use_bias=True):
         super(TableLMSubPredictionHead, self).__init__()
         self.transform = BertPredictionHeadTransform(config)
+        if output_dim is not None:
+            self.transform.dense = nn.Linear(
+                config.hidden_size, config.hidden_size if output_dim is None else output_dim
+            )
+            self.transform.LayerNorm = nn.LayerNorm(self.transform.dense.out_features, eps=config.layer_norm_eps)
         if use_bias:
             self.bias = nn.Embedding.from_pretrained(torch.zeros(config.ent_vocab_size, 1), freeze=False)
         else:
@@ -1358,7 +1363,6 @@ class HybridTableCT(BertPreTrainedModel):
             self.cls = nn.Linear(config.hidden_size, config.class_num, bias=True)
 
         self.loss_fct = BCEWithLogitsLoss(reduction="none")
-        # self.loss_fct = CrossEntropyLoss(ignore_index=-1)
 
         self.init_weights()
 
