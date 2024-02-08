@@ -452,7 +452,7 @@ class WebQueryTableDataset(Dataset):
         if tokenizer is not None:
             self.tokenizer = tokenizer
         else:
-            self.tokenizer = BertTokenizer.from_pretrained("data/pre-trained_models/bert-base-uncased")
+            self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.src = src
         self.for_bert = for_bert
         self.max_query_length = max_length[0]
