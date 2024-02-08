@@ -52,8 +52,6 @@ from src.utils.util import load_dbpedia_type_vocab, rotate_checkpoints
 
 logger = logging.getLogger(__name__)
 
-MODEL_CLASSES = {"EL": (TableConfig,)}
-
 
 def train(
     args: argparse.Namespace,
