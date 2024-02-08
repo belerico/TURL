@@ -6,6 +6,7 @@ This is a cache for elastic index stats; a layer between an index and scorer.
 
 @author: Faegheh Hasibi
 """
+
 from elastic import Elastic
 
 

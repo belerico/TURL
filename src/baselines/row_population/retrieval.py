@@ -10,6 +10,7 @@ Console application for general-purpose retrieval.
 @author: Krisztian Balog
 @author: Faegheh Hasibi
 """
+
 import argparse
 import json
 import sys

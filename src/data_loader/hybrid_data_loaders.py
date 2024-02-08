@@ -312,9 +312,11 @@ def process_single_hybrid_table_CER(input_table, config):
 
     input_ent = [entity for _, entity in entities]
     input_ent_text = [
-        config.tokenizer.encode(entity_text, max_length=config.max_cell_length, add_special_tokens=False)
-        if len(entity_text) != 0
-        else []
+        (
+            config.tokenizer.encode(entity_text, max_length=config.max_cell_length, add_special_tokens=False)
+            if len(entity_text) != 0
+            else []
+        )
         for entity_text in entities_text
     ]
 
@@ -1025,9 +1027,11 @@ def CER_build_input(pgEnt, pgTitle, secTitle, caption, header, seed_entities, se
 
     input_ent = [config.entity_wikid2id[entity] for entity in seed_entities]
     input_ent_text = [
-        config.tokenizer.encode(entity_text, max_length=config.max_cell_length, add_special_tokens=False)
-        if len(entity_text) != 0
-        else []
+        (
+            config.tokenizer.encode(entity_text, max_length=config.max_cell_length, add_special_tokens=False)
+            if len(entity_text) != 0
+            else []
+        )
         for entity_text in seed_entities_text
     ]
     input_ent = [
@@ -1104,9 +1108,11 @@ def CF_build_input(pgEnt, pgTitle, secTitle, caption, headers, core_entities, co
 
     input_ent += [config.entity_wikid2id[entity] for entity in core_entities]
     input_ent_text += [
-        config.tokenizer.encode(entity_text, max_length=config.max_cell_length, add_special_tokens=False)
-        if len(entity_text) != 0
-        else []
+        (
+            config.tokenizer.encode(entity_text, max_length=config.max_cell_length, add_special_tokens=False)
+            if len(entity_text) != 0
+            else []
+        )
         for entity_text in core_entities_text
     ]
     input_ent_type += [3] * len(core_entities)

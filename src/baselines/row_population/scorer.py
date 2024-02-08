@@ -6,6 +6,7 @@ Various retrieval models for scoring a individual document for a given query.
 
 :Authors: Faegheh Hasibi, Krisztian Balog
 """
+
 import math
 import sys
 
