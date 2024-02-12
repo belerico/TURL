@@ -79,6 +79,8 @@ def process_single_EL(input_data, config):
     row_en_map = {}
     entities_index = []
     for e_i, (index, cell) in enumerate(entities):
+        # `index` is a tuple of (row, column)
+        # `cell` is the cell content
         entities_index.append(index)
         entity_text = cell
         tokenized_ent_text = config.tokenizer.encode(

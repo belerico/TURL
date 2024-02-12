@@ -1598,11 +1598,9 @@ class TableHeaderRanking(BertPreTrainedModel):
             )
         # Add hidden states and attheaderion if they are here
         header_outputs = (header_prediction_scores,) + header_outputs
-        # pdb.set_trace()
         if target_header is not None:
             header_ranking_loss = self.loss_fct(header_prediction_scores, target_header)
             header_outputs = (header_ranking_loss,) + header_outputs
-        # pdb.set_trace()
         return header_outputs  # (masked_lm_loss), (ltr_lm_loss), prediction_scores, (hidden_states), (attentions)
 
 
@@ -1678,11 +1676,9 @@ class HybridTableEL(BertPreTrainedModel):
         #    of predictions for masked words.
         # 2. If `lm_labels` is provided we are in a causal scenario where we
         #    try to predict the next token for each input in the decoder.
-        # pdb.set_trace()
         if labels is not None:
             loss_fct = CrossEntropyLoss(ignore_index=-1)  # -1 index = padding token
 
             el_loss = loss_fct(ent_prediction_scores, labels.view(-1))
             ent_outputs = (el_loss,) + ent_outputs
-        # pdb.set_trace()
         return ent_outputs  # (masked_lm_loss), (ltr_lm_loss), prediction_scores, (hidden_states), (attentions)
