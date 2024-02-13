@@ -754,7 +754,7 @@ class pretrain_hybrid_table_collate_fn:
         ) = zip(*raw_batch)
 
         if batch_entity_cand[0] is None and self.use_cand:
-            raise Exception
+            raise RuntimeError("Entity candidate is not provided, but use_cand is set to True")
 
         max_input_tok_length = max(batch_input_tok_length)
         max_input_ent_length = max(batch_input_ent_length)

@@ -465,7 +465,7 @@ def main():
         type=str,
         help="The model checkpoint for weights initialization.",
     )
-    parser.add_argument("--mode", default=0, type=int, help="0: use both;1:without description;2:without type")
+    parser.add_argument("--mode", default=0, type=int, help="0: use both; 1: without description; 2: without type")
     parser.add_argument(
         "--config_name",
         default="",
