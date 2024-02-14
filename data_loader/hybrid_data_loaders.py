@@ -524,7 +524,7 @@ class WikiHybridTableDataset(Dataset):
         )
 
         # TODO: increase the number of processes for pre-processing
-        pool = Pool(processes=16)
+        pool = Pool(processes=40)
         if self.mode == 0:
             processed_data = list(
                 tqdm(
