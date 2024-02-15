@@ -269,7 +269,7 @@ def train(
                 # Log metrics
                 if args.local_rank in {-1, 0} and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Only evaluate when single GPU otherwise metrics may not average well
-                    if args.local_rank == -1 and args.evaluate_during_training:
+                    if eval_dataset is not None and args.local_rank == -1 and args.evaluate_during_training:
                         results = evaluate(
                             args,
                             config,

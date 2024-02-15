@@ -265,7 +265,7 @@ def train(
                 # Log metrics
                 if args.local_rank in {-1, 0} and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Only evaluate when single GPU otherwise metrics may not average well
-                    if args.evaluate_during_training:
+                    if eval_dataset is not None and args.evaluate_during_training:
                         logger.info("***** Train results *****")
                         logger.info("  loss = %s", str((tr_loss - logging_loss) / args.logging_steps))
                         logger.info(
@@ -609,6 +609,7 @@ def main():
     if args.allow_tf32:
         torch.backends.cudnn.allow_tf32 = True
         torch.backends.cuda.matmul.allow_tf32 = True
+        torch.set_float32_matmul_precision("high")
 
     # Setup CUDA, GPU & distributed training
     if args.local_rank == -1 or args.no_cuda:
