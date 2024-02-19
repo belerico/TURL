@@ -34,6 +34,8 @@ from transformers.models.bert.modeling_bert import (
     BertPreTrainedModel,
 )
 
+from src.utils.util import chunked_cross_entropy
+
 logger = logging.getLogger(__name__)
 
 
@@ -1155,7 +1157,6 @@ class HybridTableMaskedLM(BertPreTrainedModel):
         #    of predictions for masked words.
         # 2. If `lm_labels` is provided we are in a causal scenario where we
         #    try to predict the next token for each input in the decoder.
-        # pdb.set_trace()
         if tok_masked_lm_labels is not None:
             loss_fct = CrossEntropyLoss(ignore_index=-1)  # -1 index = padding token
             tok_masked_lm_loss = loss_fct(
@@ -1173,7 +1174,6 @@ class HybridTableMaskedLM(BertPreTrainedModel):
                 ent_prediction_scores.view(-1, self.config.max_entity_candidate), ent_masked_lm_labels.view(-1)
             )
             ent_outputs = (ent_masked_lm_loss,) + ent_outputs
-        # pdb.set_trace()
         return (
             tok_outputs,
             ent_outputs,
@@ -1239,11 +1239,9 @@ class HybridTableCER(BertPreTrainedModel):
         # Add hidden states and attention if they are here
         if ent_candidates_embeddings is not None:
             ent_outputs = (ent_prediction_scores,) + ent_outputs
-        # pdb.set_trace()
         if target_ent is not None:
             ent_CER_loss = self.loss_fct(ent_prediction_scores, target_ent)
             ent_outputs = (ent_CER_loss,) + ent_outputs
-        # pdb.set_trace()
         if return_tok:
             return tok_outputs, ent_outputs
         else:
@@ -1677,8 +1675,8 @@ class HybridTableEL(BertPreTrainedModel):
         # 2. If `lm_labels` is provided we are in a causal scenario where we
         #    try to predict the next token for each input in the decoder.
         if labels is not None:
-            loss_fct = CrossEntropyLoss(ignore_index=-1)  # -1 index = padding token
-
-            el_loss = loss_fct(ent_prediction_scores, labels.view(-1))
+            # loss_fct = CrossEntropyLoss(ignore_index=-1)  # -1 index = padding token
+            # el_loss = loss_fct(ent_prediction_scores, labels.view(-1))
+            el_loss = chunked_cross_entropy(ent_prediction_scores, labels.view(-1), chunk_size=128)
             ent_outputs = (el_loss,) + ent_outputs
         return ent_outputs  # (masked_lm_loss), (ltr_lm_loss), prediction_scores, (hidden_states), (attentions)
