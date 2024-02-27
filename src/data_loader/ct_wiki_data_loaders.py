@@ -170,11 +170,9 @@ class WikiCTDataset(Dataset):
             tqdm(pool.imap(partial(process_single_CT, config=self), cols, chunksize=1000), total=len(cols))
         )
         pool.close()
-        # pdb.set_trace()
 
         with open(os.path.join(data_dir, "procressed_WikiCT", "{}.pickle".format(self.src)), "wb") as f:
             pickle.dump(processed_cols, f)
-        # pdb.set_trace()
         return processed_cols
 
     def __init__(

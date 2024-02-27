@@ -96,7 +96,6 @@ def process_single_EL(input_data, config):
             row_en_map[index[0]] = [e_i]
         else:
             row_en_map[index[0]].append(e_i)
-    len(input_ent_text)
     # create input mask
     tok_tok_mask = np.ones([len(input_tok), len(input_tok)], dtype=int)
     meta_ent_mask = np.ones([tokenized_meta_length, len(input_ent_text)], dtype=int)
@@ -190,10 +189,9 @@ class ELDataset(Dataset):
                 data = json.load(f)
 
         print("{} {} tables".format(len(data), self.src))
-        process_single_EL(data[0], self)
-        pool = Pool(processes=10)
+        pool = Pool(processes=32)
         processed_data = list(
-            tqdm(pool.imap(partial(process_single_EL, config=self), data, chunksize=1000), total=len(data))
+            tqdm(pool.map(partial(process_single_EL, config=self), data, chunksize=4096), total=len(data))
         )
         pool.close()
 
