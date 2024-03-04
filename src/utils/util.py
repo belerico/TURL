@@ -11,13 +11,24 @@ from functools import partial
 from itertools import repeat
 from logging import Logger
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
+import lightning
 import numpy as np
 import pandas as pd
 import torch
+from pytorch_lightning.utilities import rank_zero_only
 from torch.optim.lr_scheduler import LambdaLR
 from tqdm import tqdm
+
+
+@rank_zero_only
+def rank_zero_print(*args, **kwargs):
+    """Wrapper around `print` that only prints from rank 0."""
+    print(*args, **kwargs)
+    if kwargs.get("file") is not None:
+        with open("rank_zero_log.txt", "a") as f:
+            print(*args, **kwargs, file=f)
 
 
 def ensure_dir(dirname):
@@ -331,3 +342,49 @@ def chunked_cross_entropy(
     ]
     non_masked_elems = (targets != ignore_index).sum()
     return torch.cat(loss_chunks).sum() / max(1, non_masked_elems)
+
+
+def trainable_parameter_summary(
+    model: torch.nn.Module,
+    show_names: bool = False,
+    tag: Optional[str] = None,
+    fabric: Optional[lightning.Fabric] = None,
+):
+    """Prints a summary of the trainable parameters of a model."""
+    print_fn = fabric.print if fabric is not None else rank_zero_print
+    trainable = {"int8": 0, "bf16": 0, "fp16": 0, "fp32": 0, "other": 0}
+    non_trainable = {"int8": 0, "bf16": 0, "fp16": 0, "fp32": 0, "other": 0}
+    param_count = {"trainable": trainable, "non_trainable": non_trainable}
+    trainable_param_names = []
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            dict_name = "trainable"
+            trainable_param_names.append(name)
+        else:
+            dict_name = "non_trainable"
+        num_params = param.numel()
+        if param.dtype == torch.int8:
+            param_count[dict_name]["int8"] += num_params
+        elif param.dtype == torch.bfloat16:
+            param_count[dict_name]["bf16"] += num_params
+        elif param.dtype == torch.float16:
+            param_count[dict_name]["fp16"] += num_params
+        elif param.dtype == torch.float32:
+            param_count[dict_name]["fp32"] += num_params
+        else:
+            param_count[dict_name]["other"] += num_params
+    if tag is not None:
+        print_fn(f"[{tag}]")
+    if show_names:
+        print_fn("Trainable parameter names:")
+        print_fn(trainable_param_names)
+    print_fn("Parameter Statistics:")
+    print_fn(f"Trainable {trainable}")
+    print_fn(f"Non-Trainable {non_trainable}")
+    total_params = sum([sum(v.values()) for v in param_count.values()])
+    total_trainable_params = sum([v for _, v in param_count["trainable"].items()])
+    print_fn(
+        f"Total: {total_params}, "
+        f"Trainable: {total_trainable_params}, "
+        f"Percentage: {total_trainable_params/total_params:.2%}"
+    )
