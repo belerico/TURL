@@ -559,6 +559,18 @@ def main():
         "The effective batch size is computed as "
         "base_effective_batch_size = per_gpu_train_batch_size * gradient_accumulation_steps * n_gpu.",
     )
+    parser.add_argument(
+        "--train_data",
+        type=str,
+        default="train",
+        help="The training data to use",
+    )
+    parser.add_argument(
+        "--eval_data",
+        type=str,
+        default="",
+        help="The training data to use. If not specified, the dev data will not be used.",
+    )
 
     args = parser.parse_args()
     args.data_dir = os.path.expanduser(args.data_dir)
@@ -669,20 +681,23 @@ def main():
             args.data_dir,
             type_vocab,
             max_input_tok=500,
-            src="train",
+            src=args.train_data,
             max_length=[50, 10, 10, 100],
             force_new=False,
             tokenizer=None,
         )
-        eval_dataset = ELDataset(
-            args.data_dir,
-            type_vocab,
-            max_input_tok=500,
-            src="dev",
-            max_length=[50, 10, 10, 100],
-            force_new=False,
-            tokenizer=None,
-        )
+        if args.eval_data != "":
+            eval_dataset = ELDataset(
+                args.data_dir,
+                type_vocab,
+                max_input_tok=500,
+                src="dev",
+                max_length=[50, 10, 10, 100],
+                force_new=False,
+                tokenizer=None,
+            )
+        else:
+            eval_dataset = None
         assert config.vocab_size == len(train_dataset.tokenizer), "vocab size mismatch, vocab_size=%d" % (
             len(train_dataset.tokenizer)
         )
