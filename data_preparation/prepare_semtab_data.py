@@ -30,7 +30,7 @@ from pyspark import SparkContext
 from pyspark.sql import SparkSession
 from pyspark.sql.types import Row
 
-pandarallel.initialize(progress_bar=True, nb_workers=64, use_memory_fs=True)
+pandarallel.initialize(progress_bar=False, nb_workers=64, use_memory_fs=True)
 
 
 def wikidata_lookup(query: Any, retry: int = 3, dbpedia_types: Dict[str, List[str]] | None = None):
@@ -172,26 +172,31 @@ if __name__ == "__main__":
     parser.add_argument(
         "--table",
         type=str,
-        default="Round4_2020",
+        default="Round1_T2D",
         help="The name of the table to process",
     )
     parser.add_argument(
         "--gt_path",
         type=str,
-        default="~/semtab-data/raw/Round4_2020/gt/cea.csv",
+        default="/home/fbelotti/semtab-data/raw/Round1_T2D/gt/CEA_Round1_gt_WD.csv",
         help="The path to the file containing the ground-truth",
     )
     parser.add_argument(
         "--tables_folder",
         type=str,
-        default="~/semtab-data/raw/Round4_2020/tables/",
+        default="/home/fbelotti/semtab-data/raw/Round1_T2D/tables/",
         help="The path to the real tables folder",
     )
     parser.add_argument(
         "--lookup",
         type=str,
         default="wikidata",
-        help="The lookup service to use",
+        help="The lookup service to use. It can be 'wikidata' or 'lamapi'",
+    )
+    parser.add_argument(
+        "--lamapi_fuzzy",
+        action="store_true",
+        help="Whether to use fuzzy search in LAMAPI",
     )
     parser.add_argument(
         "--insert_target_mention_in_candidates",
@@ -214,7 +219,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dbpedia_types_path",
         type=str,
-        default="~/turl-data/dbpedia_types/2019_08_30/instance_type_en.ttl",
+        default="/home/fbelotti/turl-data/dbpedia_types/2019_08_30/instance_type_en.ttl",
         help="The path to the dbpedia types file",
     )
     args = parser.parse_args()
@@ -228,25 +233,25 @@ if __name__ == "__main__":
             ("spark.executor.instances", "7"),
             ("spark.driver.memory", "150g"),
             ("spark.driver.maxResultSize", "100g"),
-            ("spark.driver.extraClassPath", "~/Downloads/sqlite-jdbc-3.36.0.3.jar"),
+            ("spark.driver.extraClassPath", "/home/fbelotti/Downloads/sqlite-jdbc-3.36.0.3.jar"),
         ]
     )
     sc = SparkContext(conf=conf)
     spark = SparkSession(sc)
 
     # The lookup service to use
-    lookup = args.lookup
+    lookup = args.lookup + "_fuzzy" if args.lamapi_fuzzy else ""
 
     # The name of the table to process
     table = args.table
     table_type = table.lower()
 
     # The path to the file containing the ground-truth
-    # gt_path = "~/semtab-data/raw/{}/gt/CEA_Round1_gt_WD.csv".format(table)
-    # gt_path = "~/semtab-data/raw/HardTablesR2/gt/cea.csv"
-    # gt_path = "~/semtab-data/raw/HardTablesR3/gt/cea.csv"
-    # gt_path = "~/semtab-data/raw/2T_Round4/gt/cea.csv"
-    # gt_path = "~/semtab-data/raw/Round3_2019/gt/CEA_Round3_gt_WD.csv"
+    # gt_path = "/home/fbelotti/semtab-data/raw/Round1_T2D/gt/CEA_Round1_gt_WD.csv"
+    # gt_path = "/home/fbelotti/semtab-data/raw/HardTablesR2/gt/cea.csv"
+    # gt_path = "/home/fbelotti/semtab-data/raw/HardTablesR3/gt/cea.csv"
+    # gt_path = "/home/fbelotti/semtab-data/raw/2T_Round4/gt/cea.csv"
+    # gt_path = "/home/fbelotti/semtab-data/raw/Round3_2019/gt/CEA_Round3_gt_WD.csv"
     gt_path = args.gt_path
 
     # The path to the real tables folder
@@ -299,7 +304,7 @@ if __name__ == "__main__":
         wikipedia_wikidata_mapping = (
             spark.read.format("jdbc")
             .options(
-                url="jdbc:sqlite:~/turl-data/index_enwiki-20190420.db",
+                url="jdbc:sqlite:/home/fbelotti/turl-data/index_enwiki-20190420.db",
                 driver="org.sqlite.JDBC",
                 dbtable="mapping",
             )
@@ -350,13 +355,13 @@ if __name__ == "__main__":
 
     # Get candidates for every mention
     unique_mentions = gt_df.drop_duplicates(subset=["mention"])
-    if lookup == "wikidata":
+    if "wikidata" in lookup:
         unique_mentions.loc[:, "candidates"] = unique_mentions.parallel_apply(
             lambda row: wikidata_lookup(row["mention"], dbpedia_types=dbpedia_types)[1], axis=1
         )
-    elif lookup == "lamapi":
+    elif "lamapi" in lookup:
         unique_mentions.loc[:, "candidates"] = unique_mentions.parallel_apply(
-            lambda row: lamapi_lookup(row["mention"], dbpedia_types=dbpedia_types, fuzzy=True)[1], axis=1
+            lambda row: lamapi_lookup(row["mention"], dbpedia_types=dbpedia_types, fuzzy=args.lamapi_fuzzy)[1], axis=1
         )
     else:
         raise ValueError("Invalid lookup: {}".format(lookup))
@@ -487,12 +492,12 @@ if __name__ == "__main__":
     # Dump the dataset for TURL evaluation
     print(
         "Saving tables to",
-        "~/turl-data/{}{}{}.table_entity_linking.json".format(
+        "/home/fbelotti/turl-data/{}{}{}.table_entity_linking.json".format(
             table_type, "_all" if args.insert_target_mention_in_candidates else "", "_" + lookup
         ),
     )
     with open(
-        "~/turl-data/{}{}{}.table_entity_linking.json".format(
+        "/home/fbelotti/turl-data/{}{}{}.table_entity_linking.json".format(
             table_type, "_all" if args.insert_target_mention_in_candidates else "", "_" + lookup
         ),
         "w",
@@ -501,7 +506,7 @@ if __name__ == "__main__":
 
     # Pre-process dataset with TURL ELDataset
     print("Creating ELDataset")
-    data_dir = "~/turl-data"
+    data_dir = "/home/fbelotti/turl-data"
     type_vocab = load_dbpedia_type_vocab(data_dir)
     train_dataset = ELDataset(
         data_dir,
