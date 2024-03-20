@@ -609,11 +609,16 @@ class TableMLMHead(nn.Module):
     def load_pretrained(self, checkpoint):
         state_dict = self.state_dict()
         for x in state_dict:
-            print("cls." + x[4:])
             if x.find("tok_predictions") != -1:
-                state_dict[x] = checkpoint["cls." + x[4:]]
+                if "cls." + x[4:] in checkpoint:
+                    state_dict[x] = checkpoint["cls." + x[4:]]
+                else:
+                    print("Missing", "cls." + x[4:], "in checkpoint state dict")
             elif x.find("bias") == -1:
-                state_dict[x] = checkpoint["cls." + x[4:]]
+                if "cls." + x[4:] in checkpoint:
+                    state_dict[x] = checkpoint["cls." + x[4:]]
+                else:
+                    print("Missing", "cls." + x[4:], "in checkpoint state dict")
         self.load_state_dict(state_dict)
 
     def forward(self, tok_sequence_output, ent_sequence_output, ent_candidates, ent_candidates_embeddings):
